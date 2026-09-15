@@ -14,3 +14,9 @@ Modified source files retain their original copyright notices.
 
 This attribution does not imply affiliation with or endorsement by the
 original authors. Project ownership, development, and releases are independent.
+
+The su-engineering login theme includes a subset of JetBrains Mono 2.304.
+Copyright 2020 The JetBrains Mono Project Authors.
+https://github.com/JetBrains/JetBrainsMono
+Licensed under the SIL Open Font License, Version 1.1; the full license is
+bundled at theme/su-engineering/login/resources/fonts/OFL.txt.

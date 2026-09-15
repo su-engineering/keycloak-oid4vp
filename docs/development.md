@@ -1,82 +1,31 @@
 # Development
 
-## Prerequisites
+Use Java 21 and the checked-in Maven wrapper. Docker is required for the demo and E2E tests; Playwright Chromium is required only for browser tests.
 
-- Java 21
-- Maven 3.9.16 via the checked-in `./mvnw` wrapper
-- Docker
-- [`oid4vc-dev`](https://github.com/dominikschlosser/oid4vc-dev) for local wallet-based development
-- `ngrok` for public HTTPS testing with real wallets
+## Start here
 
-## Quick Start
-
-### Local Wallet Mode
-
-```bash
-scripts/dev.sh --local-wallet
+```sh
+./scripts/demo.sh
 ```
 
-This mode:
+This creates a disposable Keycloak instance with the `su-engineering` theme and synthetic wallet credentials. See [quick start](quickstart.md) for the complete login walkthrough. The demo shares the integration-test infrastructure, generates keys at startup, and does not launch an automated browser.
 
-- builds the extension
-- generates a local realm config
-- starts an `oid4vc-dev` wallet with sample PID credentials
-- starts the `oid4vc-dev` debugging proxy
-- launches Keycloak behind that proxy
+## Repository map
 
-Typical access points:
+| Path | Contents |
+| --- | --- |
+| `src/main/java/io/github/suengineering/keycloak/oid4vp/` | Provider, endpoints, verification, request services, and mappers |
+| `src/main/resources/META-INF/` | SPI and bundled-theme registration |
+| `src/main/resources/theme/` | `su-engineering` and existing `oid4vp` login themes |
+| `src/main/resources/theme-resources/` | Fallback wallet templates and shared completion JavaScript |
+| `src/test/java/` | Unit tests, cryptographic fixtures, E2E infrastructure, and local demo |
+| `src/test/resources/` | Synthetic realm and credential fixtures |
+| `scripts/` | Demo and existing sandbox helpers |
+| `deployment/` | Existing Coolify image and Compose configuration |
+| `loadtest/` | Clustered browser/SSE load test |
+| `docs/` | User, operator, and contributor documentation |
 
-- Keycloak: `http://localhost:9090`
-- Admin Console: `http://localhost:9090/admin`
-- Account Console: `http://localhost:9090/realms/wallet-demo/account`
-- `oid4vc-dev` dashboard: `http://localhost:9091`
-- wallet UI: `http://localhost:8086`
-
-### Sandbox Mode
-
-```bash
-scripts/dev.sh
-```
-
-This mode builds the extension, generates a realm config from sandbox certificate material, starts `ngrok`, and runs Keycloak with a public HTTPS base URL suitable for real cross-device wallet tests.
-
-Expected sandbox inputs:
-
-| File | Description |
-|------|-------------|
-| `sandbox-ngrok-combined.pem` | Verifier certificate material used for request-object signing and `x5c` headers |
-| `sandbox-verifier-info.json` | Verifier attestation payload for the `verifier_info` claim |
-
-Override the defaults with `--pem`, `--verifier-info`, or `SANDBOX_DIR`.
-
-## Script Options
-
-```text
---local-wallet           Use local oid4vc-dev wallet
---wallet-port <port>     oid4vc-dev wallet port (default: 8086)
---pem <file>             Custom PEM file
---verifier-info <file>   Custom verifier info JSON
---domain <name>          Override ngrok domain
---no-build               Skip Maven build
---skip-realm             Skip realm config generation
---no-proxy               Disable oid4vc-dev proxy
---no-ngrok               Run Keycloak without ngrok
---ngrok-only             Start only the ngrok tunnel
-```
-
-## Manual Setup
-
-```bash
-./mvnw package -DskipTests
-scripts/setup-local-realm.sh sandbox/sandbox-ngrok-combined.pem sandbox/sandbox-verifier-info.json
-```
-
-Then either:
-
-- run `docker compose up` for localhost-only testing, or
-- run `scripts/run-keycloak-ngrok.sh --domain <your-ngrok-domain>` for public HTTPS testing.
-
-## Running Tests
+## Running tests
 
 ```sh
 ./mvnw clean test
@@ -84,7 +33,7 @@ Then either:
 ./mvnw clean verify
 ```
 
-`test` runs unit and cryptographic tests. `verify` also checks formatting, builds the provider, runs the Docker/browser E2E suite, and writes coverage to `target/site/jacoco/index.html`. The E2E wallet image is pinned to `v1.8.0` to match the test client API.
+`test` runs unit and cryptographic tests. `verify` also checks Java formatting, builds the provider, runs Docker/browser E2E tests, and writes coverage to `target/site/jacoco/index.html`. The wallet image is pinned to `v1.8.0` for the test client API.
 
 Install the browser used by the pinned Playwright dependency once:
 
@@ -92,7 +41,38 @@ Install the browser used by the pinned Playwright dependency once:
 ./mvnw org.codehaus.mojo:exec-maven-plugin:3.6.3:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.classpathScope=test -Dexec.args='install chromium'
 ```
 
-On Linux, use `install --with-deps chromium` for required OS packages. Docker must be running. If Testcontainers cannot find a nonstandard Docker socket (for example OrbStack), configure it from the active Docker context:
+On Linux, use `install --with-deps chromium` for required OS packages. CI installs these dependencies automatically.
+
+### Focused checks
+
+```sh
+# DID resolution and real SD-JWT cryptography
+./mvnw -Dtest=DidWebResolverTest,SdJwtVerifierDidIntegrationTest,DidWebCredentialVerificationTest test
+
+# Both bundled themes, real wallet login, responsive layout, and standard forms
+./mvnw verify -Dit.test=KeycloakThemeE2eIT
+
+# Entire suite against the existing Coolify runtime
+./mvnw clean verify -Dkeycloak.version=26.5.4
+```
+
+The E2E container version follows `keycloak.version`; use `clean` when switching versions. CI runs both 26.5.4 and 26.5.5. Prefer `verify` when selecting E2E classes so the provider is packaged first and Failsafe reports failures correctly.
+
+### What the tests establish
+
+| Layer | Coverage | Boundary |
+| --- | --- | --- |
+| Unit tests | Configuration, DCQL, request state, mappings, caches, and error handling | Isolated collaborators where appropriate |
+| DID cryptographic regression | Real resolver/verifier integration, EC/Ed25519, disclosures, holder binding, negative presentations | HTTPS transport is stubbed; no public DID endpoint |
+| Wallet E2E | Running Keycloak, signed/encrypted requests, SD-JWT/mDoc, same/cross-device login, replay/session checks | Synthetic certificate-backed development wallets |
+| Theme E2E | Both bundled wallet themes; neutral form validation, modes, local assets, keyboard entry, and 320/390/1440 px overflow checks | Browser regression coverage, not a full accessibility audit |
+| OIDF suite | Explicitly selected live conformance scenarios | Requires credentials and external connectivity; excluded by default |
+
+A release must still exercise the deployed did:web credential shape with an authorized HTTPS issuer and a real wallet against the candidate image. Automated coverage is not a substitute for that acceptance test.
+
+### Docker discovery
+
+Docker must be running. If Testcontainers cannot find a nonstandard socket, derive it from the active Docker context:
 
 ```sh
 export DOCKER_HOST="$(docker context inspect --format '{{.Endpoints.docker.Host}}')"
@@ -100,28 +80,57 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 ./mvnw clean verify
 ```
 
-For did:web iteration:
+The socket override is relevant to containerized test helpers. Do not change your global Docker context just to match a copied path from someone else's machine.
+
+### Reports
+
+- `target/surefire-reports/`: unit test results.
+- `target/failsafe-reports/`: integration test results.
+- `target/site/jacoco/index.html`: combined coverage report.
+- CI retains reports for seven days, including failed runs.
+
+There is no `coverage` profile; normal `verify` generates coverage. Test logs can contain synthetic presentations. Review and redact them before sharing.
+
+## Theme development
+
+The demo mounts `src/main/resources/theme/su-engineering/` and disables theme caching. Reload after resource edits. Rebuild/restart for Java or shared extension-resource changes. [Theme documentation](themes.md) covers file responsibilities, screenshot refresh, and compatibility contracts.
+
+## Existing sandbox workflows
+
+These workflows are for integration with an existing sandbox and real wallets. **Both require your own certificate and verifier-info files**, including `--local-wallet`; use `scripts/demo.sh` for a self-contained start.
 
 ```sh
-./mvnw -Dtest=DidWebResolverTest,SdJwtVerifierDidIntegrationTest,DidWebCredentialVerificationTest test
+scripts/dev.sh --local-wallet
+scripts/dev.sh
 ```
 
-The combined credential test uses the real resolver and cryptographic verifier with synthetic EC/Ed25519 credentials; only HTTPS transport is stubbed. It covers disclosure and holder binding, old-but-unexpired issuance, and rejection of bad signatures, expired credentials, incorrect nonce/audience, and tampered disclosures. It does not replace a release-image test with a real wallet and HTTPS issuer.
+The first starts an installed `oid4vc-dev` CLI and local proxy. The second uses `ngrok` for a public HTTPS hostname. The script's CLI wallet version is whatever is installed on your PATH; it is separate from the pinned Docker wallet used by the demo and tests.
 
-To verify the other existing deployment version:
+Expected files:
+
+| Default path | Purpose |
+| --- | --- |
+| `sandbox/sandbox-ngrok-combined.pem` | Verifier signing key and certificate chain |
+| `sandbox/sandbox-verifier-info.json` | Verifier attestation payload |
+
+Use `SANDBOX_DIR`, `--pem`, or `--verifier-info` to select another location. Keep these files outside version control.
 
 ```sh
-./mvnw clean verify -Dkeycloak.version=26.5.4
+scripts/dev.sh --help
 ```
 
-The test container version follows the Maven property. CI checks both 26.5.4 and 26.5.5. Run `clean` when switching versions. When selecting individual E2E classes, use `./mvnw verify -Dit.test=KeycloakOid4vpLoginE2eIT` so the provider is built and Failsafe checks the result.
+Common options include `--wallet-port`, `--domain`, `--no-build`, `--skip-realm`, `--no-proxy`, and `--no-ngrok`. Local proxy defaults are Keycloak on `9090`, proxy dashboard on `9091`, and wallet on `8086`. Without the proxy, Keycloak uses `8080`.
 
-Live OIDF conformance is excluded by default and enabled with `-Pconformance`; it also needs credentials. There is no `coverage` profile: normal `verify` generates coverage.
+For manual realm generation:
 
-## Conformance
+```sh
+./mvnw package -DskipTests
+scripts/setup-local-realm.sh sandbox/sandbox-ngrok-combined.pem sandbox/sandbox-verifier-info.json
+docker compose up
+```
 
-For OIDF verifier conformance setup and execution, see [conformance.md](conformance.md).
+The generated realm is ignored by Git. The root Compose file mounts that generated file; it cannot start the intended realm from a fresh checkout until generation succeeds.
 
-## Load Testing
+## Conformance and load testing
 
-For clustered browser+SSE load testing of the cross-device flow, see [../loadtest/README.md](../loadtest/README.md).
+Live OIDF conformance requires the explicit `conformance` profile, credentials, and a reachable HTTPS verifier. See [conformance](conformance.md). The clustered browser/SSE workload is documented in [load testing](../loadtest/README.md).

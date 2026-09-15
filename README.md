@@ -1,34 +1,75 @@
 # Keycloak OID4VP Extension
 
-Wallet-based login for Keycloak, maintained by [su-engineering](https://github.com/su-engineering). Verify SD-JWT credentials issued by **did:web** issuers as well as credentials backed by **X.509 certificates**.
+**Digital credentials. Familiar Keycloak login.**
 
-The extension creates OID4VP requests, verifies wallet responses, maps disclosed claims, and completes the Keycloak login flow. It supports same-device links, cross-device QR codes, SD-JWT VC, mDoc, DCQL, `direct_post`, and `direct_post.jwt`.
+Add wallet sign-in to Keycloak with **did:web-issued SD-JWT credentials** and **X.509-backed credentials**. The extension requests a presentation, verifies it, and maps disclosed claims into a Keycloak identity or session. Applications keep using their existing Keycloak integration.
 
-This is the independent development baseline. The did:web SD-JWT flow is deployed; broader enterprise support and public releases are being prepared. See the [readiness plan](docs/enterprise-readiness.md).
+Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) · Java 21 · Keycloak 26.5.4 / 26.5.5
 
-## Build and test
+[Quick start](docs/quickstart.md) · [Documentation](docs/README.md) · [Configuration](docs/configuration.md) · [Contributing](CONTRIBUTING.md)
 
-Use **Java 21**. The Maven wrapper downloads pinned Maven **3.9.16** on its first run.
+![Wallet sign-in with the neutral su.engineering theme: an open-wallet link alongside a QR code](docs/images/su-engineering-wallet-desktop.jpg)
+
+*The optional `su-engineering` theme, captured from a running Keycloak instance with synthetic demo data. The existing OpenKYC theme remains available as `oid4vp`.*
+
+## What it does
+
+| Capability | Current behavior |
+| --- | --- |
+| **did:web issuer verification** | Opt-in HTTPS DID resolution for SD-JWT issuer keys, including EC and Ed25519; signature, disclosures, and holder binding are verified. |
+| **Certificate-based verification** | X.509 issuer verification and ETSI trust-list integration; issuer-metadata fallback outside strict X.509 mode. |
+| **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
+| **Wallet interaction** | Same-device links and cross-device QR codes, with server-sent events to resume browser login. |
+| **Presentation requests** | DCQL credential and claim selection; `direct_post` and encrypted `direct_post.jwt` responses. |
+| **Keycloak integration** | Claim-to-user-attribute and claim-to-session-note mappers; optional transient users. |
+| **Login themes** | Neutral `su-engineering` and existing OpenKYC `oid4vp`; select per realm. |
+
+### Project status
+
+`0.1.0-SNAPSHOT` is a development baseline. The did:web SD-JWT flow is deployed, and CI is configured to test both pinned Keycloak versions. Public releases and enterprise support are being prepared.
+
+**Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** In particular, DID key authorization and standard path/port handling need further work. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
+
+## Try it locally
+
+You need **Java 21**, **Docker**, and a shell. Maven is downloaded by the pinned wrapper. The first run also downloads dependencies and container images.
 
 ```sh
-./mvnw clean test                  # Unit and cryptographic regression tests
-./mvnw clean verify                # Formatting, unit tests, Docker/browser E2E tests, coverage
-./mvnw package -DskipTests         # Build a provider JAR after testing
+git clone https://github.com/su-engineering/keycloak-extension-oid4vp.git
+cd keycloak-extension-oid4vp
+./scripts/demo.sh
 ```
 
-Docker is required for E2E tests. See [development](docs/development.md) for browser installation and Docker setup.
+Open the **Sign in** URL printed in the terminal and choose **Sign in with Wallet**. The demo selects `su-engineering` and creates disposable Keycloak and wallet containers with generated certificates and synthetic credentials. It does not require your sandbox keys or a real wallet.
 
-The compile target and root Compose image are Keycloak **26.5.5**. The existing Coolify Dockerfile remains pinned to **26.5.4**. A runtime upgrade is a separate migration; changing Maven dependencies alone does not upgrade the deployed server.
+Follow the [five-minute walkthrough](docs/quickstart.md) to complete a login with the included development wallet. Stop with **Ctrl+C**. This fixture uses `admin/admin` and relaxed test settings; use it only on a trusted development machine.
 
-## Install
+## How it fits
 
-Copy `target/keycloak-extension-oid4vp.jar` into Keycloak's `providers/` directory and rebuild the Keycloak image. Install one copy of the extension. The provider ID and bundled login theme are both named `oid4vp`.
+```mermaid
+flowchart LR
+    App[Your application] <-->|OIDC login| KC[Keycloak + OID4VP extension]
+    Wallet[Credential wallet] -->|Presentation| KC
+    KC -->|HTTPS public keys| DID[did:web document]
+    KC -->|Certificate trust| TL[ETSI trust list]
+    KC -->|Revocation checks| SL[Status list]
+```
 
-See [deployment/README.md](deployment/README.md) for the existing container deployment.
+The wallet proves possession of a credential. The extension verifies the presentation under the realm's configuration, then lets Keycloak complete authentication. The application receives its normal Keycloak response. See [architecture and protocol diagrams](docs/diagrams.md) for the trust boundaries and completion flow.
 
-## did:web credentials
+## Install in an existing Keycloak instance
 
-Enable DID resolution in the OID4VP identity provider configuration:
+```sh
+./mvnw clean verify
+```
+
+This produces `target/keycloak-extension-oid4vp.jar`. Install one copy in Keycloak's `providers/` directory and run Keycloak's build step. Add the **OID4VP** identity provider, configure the credential request and trust policy, then select **Realm settings → Themes → Login theme → su-engineering** if desired.
+
+[Installation guide](docs/installation.md) covers the exact artifact, container build, configuration steps, and validation. [Migration and rollback](docs/migration.md) covers existing deployments.
+
+## did:web configuration
+
+This is an **IdP config fragment**, not a complete realm import:
 
 ```json
 {
@@ -40,23 +81,34 @@ Enable DID resolution in the OID4VP identity provider configuration:
 }
 ```
 
-This is a config fragment, not a complete realm import. Configure the requested credential type, verifier signing material, and claim mappings as described in [configuration](docs/configuration.md).
+Also configure the credential type, identifying claim or transient-user mode, and verifier signing material. **The credential issuer's DID and the verifier's signing certificate serve different purposes.** Enabling DID resolution does not remove the wallet's verifier-authentication requirements.
 
-For a DID issuer, the verifier fetches the issuer's DID document over HTTPS and uses its public keys to verify the credential. It then verifies holder binding and disclosures. Existing X.509 and issuer-metadata paths remain available. DID issuer verification is separate from the certificate used to identify the verifier to the wallet.
+[Configuration reference](docs/configuration.md) explains the resolution order, supported key representations, current limitations, and DCQL mapping.
 
-Read the [did:web compatibility notes](docs/configuration.md#didweb-issuer-verification) before changing issuer formats or trust policy.
+## Develop and contribute
 
-## Documentation
+```sh
+./mvnw clean test       # Unit and cryptographic regression tests
+./mvnw spotless:apply   # Format Java
+./mvnw clean verify     # Format check, unit tests, Docker/browser E2E, coverage
+```
 
-- [Configuration](docs/configuration.md)
-- [Development and testing](docs/development.md)
-- [Migration and rollback](docs/migration.md)
-- [Enterprise readiness](docs/enterprise-readiness.md)
-- [Request flow](docs/request-flow.md) and [diagrams](docs/diagrams.md)
-- [OIDF conformance testing](docs/conformance.md)
-- [Load testing](loadtest/README.md)
-- [Contributing](CONTRIBUTING.md)
+Install the test browser once using the command in [development](docs/development.md). Tests exercise both login themes; DID cryptographic tests use generated EC and Ed25519 credentials. Live OIDF conformance is an explicit, separately configured suite.
 
-## License
+Bug reports and focused contributions are welcome. Include the Keycloak version, extension revision, reproduction steps, and redacted configuration. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately to **[security@su.engineering](mailto:security@su.engineering)**; see [SECURITY.md](SECURITY.md).
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for retained third-party attribution.
+## Documentation map
+
+| I want to… | Start here |
+| --- | --- |
+| Run a local wallet login | [Quick start](docs/quickstart.md) |
+| Install and configure the provider | [Installation](docs/installation.md) · [Configuration](docs/configuration.md) |
+| Select or customize the theme | [Themes and screenshots](docs/themes.md) |
+| Understand the implementation | [Architecture](docs/diagrams.md) · [Code walkthrough](docs/request-flow.md) |
+| Operate or troubleshoot it | [Operations](docs/operations.md) · [Existing Coolify deployment](deployment/README.md) |
+| Test or upgrade it | [Development](docs/development.md) · [Migration](docs/migration.md) |
+| Evaluate enterprise readiness | [Readiness plan](docs/enterprise-readiness.md) · [Conformance](docs/conformance.md) |
+
+## License and attribution
+
+Code is licensed under [Apache License 2.0](LICENSE). Retained third-party copyright and attribution are in [NOTICE](NOTICE). The bundled JetBrains Mono font uses the [SIL Open Font License 1.1](src/main/resources/theme/su-engineering/login/resources/fonts/OFL.txt).

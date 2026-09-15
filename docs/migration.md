@@ -18,6 +18,10 @@ The namespace changes Java class names. Code that imports these classes must upd
 
 The cleanup does not change verification logic, credential acceptance policy, realm import contents, or database settings. License notices are included in the provider JAR.
 
+## Optional neutral theme
+
+The provider also bundles `su-engineering`. Existing realm selections stay unchanged. Select it explicitly under **Realm settings → Themes → Login theme**; restore the previous selection to undo the appearance change. This does not migrate credential policy or login state. See [themes](themes.md) for the inherited form behavior and OpenKYC entry-path notes.
+
 ## Deploying a reviewed build
 
 1. Record and retain the running image digest. Back up the database and realm configuration using the deployment's existing backup process.

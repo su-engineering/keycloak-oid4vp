@@ -20,6 +20,7 @@ The deployed did:web SD-JWT flow is the compatibility baseline. These findings c
 - **Health checks:** the Coolify probe uses `curl` and `|| exit 0`, so it can report success without a healthy server. Replace it after validating the container's management endpoint.
 - **Secrets and initialization:** separate examples from production realms, remove permissive credentials/redirects from production defaults, and move verifier private keys out of image layers. Generated and static imports currently target the same realm filename and need a deliberate initialization policy.
 - **Clustering:** test replay races, node loss, cache invalidation, SSE reconnects, and rolling changes against the shared state store.
+- **Existing OpenKYC login selection:** its generic login template constructs a broker link without the authentication-session query parameters. Preserve direct entry through `kc_idp_hint=oid4vp` and review a separate fix; the neutral theme uses inherited Keycloak provider links.
 - **Observability:** structured errors, latency and resolution metrics, readiness, and logs without credential claims, presentations, or private material.
 - **Resource limits:** test malformed and oversized presentations, DCQL complexity, request concurrency, and slow issuer endpoints.
 
@@ -28,7 +29,7 @@ The deployed did:web SD-JWT flow is the compatibility baseline. These findings c
 - Test a complete did:web wallet-to-Keycloak flow against the release image, in addition to cryptographic tests and the certificate-based E2E suite.
 - Publish supported features and limitations. A passing happy path is not a conformance claim.
 - Run the OIDF suite where applicable and document the profiles it validates.
-- Choose a private vulnerability reporting route, support policy, signed release process, artifact inventory/SBOM, and dependency review cadence.
+- Maintain the private vulnerability route in [SECURITY.md](../SECURITY.md); define versioned support, signed releases, artifact inventory/SBOM, and dependency review cadence before public releases.
 - Review tracked examples and the initial commit for private material. Keep required licenses and attribution in source and artifacts.
 
 Suggested order: trust and login integrity, deployment reliability, runtime upgrades, then public release automation. This cleanup preserves behavior so these decisions can be reviewed independently.

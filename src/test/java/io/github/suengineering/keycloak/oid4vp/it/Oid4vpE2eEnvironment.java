@@ -114,7 +114,7 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
 
     public static synchronized Oid4vpE2eEnvironment getOrStart() throws Exception {
         if (instance == null) {
-            instance = new Oid4vpE2eEnvironment();
+            instance = new Oid4vpE2eEnvironment(true);
             if (!shutdownHookRegistered) {
                 Runtime.getRuntime().addShutdownHook(new Thread(Oid4vpE2eEnvironment::closeQuietly));
                 shutdownHookRegistered = true;
@@ -123,7 +123,11 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         return instance;
     }
 
-    private Oid4vpE2eEnvironment() throws Exception {
+    static Oid4vpE2eEnvironment startDemo() throws Exception {
+        return new Oid4vpE2eEnvironment(false);
+    }
+
+    private Oid4vpE2eEnvironment(boolean startBrowser) throws Exception {
         callback = new Oid4vpTestCallbackServer();
         String callbackUrl = callback.localCallbackUrl();
 
@@ -175,7 +179,19 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         copyProviderJars(keycloak);
         keycloak.withCopyFileToContainer(
                 MountableFile.forHostPath(walletTlsBundle), "/opt/keycloak/conf/oid4vc-wallets.pem");
-        configureCoverage(keycloak);
+        if (startBrowser) {
+            configureCoverage(keycloak);
+        } else {
+            keycloak.withFileSystemBind(
+                    Path.of("src/main/resources/theme/su-engineering")
+                            .toAbsolutePath()
+                            .toString(),
+                    "/opt/keycloak/themes/su-engineering",
+                    BindMode.READ_ONLY);
+            keycloak.withEnv("KC_SPI_THEME_STATIC_MAX_AGE", "-1");
+            keycloak.withEnv("KC_SPI_THEME_CACHE_THEMES", "false");
+            keycloak.withEnv("KC_SPI_THEME_CACHE_TEMPLATES", "false");
+        }
         try {
             keycloak.start();
         } finally {
@@ -183,8 +199,8 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         }
         keycloakHostUrl = "http://localhost:" + keycloak.getMappedPort(8080);
 
-        playwright = Playwright.create();
-        browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+        playwright = startBrowser ? Playwright.create() : null;
+        browser = startBrowser ? playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true)) : null;
         adminClient = KeycloakAdminClient.login(OBJECT_MAPPER, keycloakHostUrl, "admin", "admin");
 
         String trustListUrl = pidTrustListUrl(wallet);

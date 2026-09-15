@@ -1,182 +1,71 @@
-# Keycloak OID4VP Extension - Coolify Deployment
+# Existing Coolify deployment
 
-## Overview
+This directory preserves the existing OpenKYC deployment: Keycloak **26.5.4**, PostgreSQL, a generated/static realm import, and TLS termination at Coolify's reverse proxy. New installations should start with the [installation guide](../docs/installation.md) and an explicit realm/trust policy.
 
-This directory contains all files needed to deploy Keycloak with the OID4VP extension to Coolify.
+The JAR also contains the opt-in `su-engineering` theme. Existing realm configuration continues to select OpenKYC `oid4vp`; change the realm's login theme explicitly to use the neutral version.
 
-**Features:**
-- Keycloak 26.5.4 with OID4VP identity provider
-- PostgreSQL database for persistence
-- OpenKYC custom theme
-- Auto-imported realm configuration
-- SSL handled by Coolify reverse proxy
+## Files
 
-## Prerequisites
+| File | Purpose |
+| --- | --- |
+| [docker/Dockerfile](docker/Dockerfile) | Maven build, realm generation, and optimized Keycloak runtime |
+| [docker-compose.coolify.yml](docker-compose.coolify.yml) | Keycloak, PostgreSQL, and external `coolify` network |
+| [scripts/generate-realm.sh](scripts/generate-realm.sh) | Generated verifier material and initial realm |
+| [realm-import.json](realm-import.json) | Existing static OpenKYC realm import |
+| [.env.example](.env.example) | Environment variable names and example values |
 
-- Coolify instance with Docker runtime
-- VPS with Docker support
-- Domain name (optional, but recommended)
+## Review before deploying
 
-## File Structure
+These are compatibility files, not hardened production defaults:
 
-```
-deployment/
-├── docker/
-│   └── Dockerfile           # Multi-stage build (Maven + Keycloak)
-├── scripts/
-│   └── generate-realm.sh    # Realm certificate generation
-├── docker-compose.coolify.yml  # Full stack definition
-├── .env.example             # Environment variable template
-└── README.md                # This file
-```
+- The Compose file has fallback database/admin credentials. Set explicit secrets through the deployment platform.
+- The current healthcheck ends with `|| exit 0`; it can report success when Keycloak is unavailable.
+- Verifier material is generated during image construction. Private-key storage and rotation need a deliberate deployment policy.
+- The Dockerfile copies generated imports, then copies the static realm onto the same target filename. Review the final image's import, not just the generator output.
+- Startup import initializes absent realms; it is not a general migration mechanism for an existing realm.
+- The external `coolify` Docker network and proxy labels assume a Coolify-managed environment.
 
-## Deployment Steps
+These items are tracked in [enterprise readiness](../docs/enterprise-readiness.md). This documentation pass does not change the running deployment configuration.
 
-### 1. Prepare Your Repository
+## Build and inspect locally
 
-After validating the candidate and coordinating deployment, push your reviewed branch to the organization repository. A push to the configured deployment branch may trigger a rebuild:
-```bash
-git push origin main
+Run from the repository root:
+
+```sh
+./mvnw clean verify -Dkeycloak.version=26.5.4
+docker compose --project-directory . -f deployment/docker-compose.coolify.yml config --quiet
+docker build -f deployment/docker/Dockerfile -t keycloak-oid4vp:review .
 ```
 
-### 2. Create Coolify Resource
+The build copies exactly one provider JAR: `/opt/keycloak/providers/keycloak-extension-oid4vp.jar`. The current Dockerfile compiles with the Maven default (26.5.5) and runs on 26.5.4; the test matrix covers both. A future runtime upgrade must align build and deployment choices deliberately.
 
-1. Log in to your Coolify dashboard
-2. Click **Add New Resource**
-3. Select **Application** (or use Docker Compose)
-4. Choose **Docker Compose** as the source
-5. Connect your GitHub repository
-6. Select the `deployment/docker-compose.coolify.yml` file
+## Configure Coolify
 
-### 3. Configure Environment Variables
+1. Connect the organization repository to a Docker Compose application.
+2. Select `deployment/docker-compose.coolify.yml` and use the repository root as the build/project directory.
+3. Configure the external hostname, TLS, and proxy routing in Coolify.
+4. Supply explicit database and bootstrap credentials through protected environment variables.
+5. Build a reviewed revision and inspect the final realm import and provider before staging.
 
-In Coolify, go to the **Environment Variables** section and add:
+| Variable | Role |
+| --- | --- |
+| `KC_DB_URL` | JDBC URL, normally `jdbc:postgresql://postgres:5432/keycloak` |
+| `KC_DB_USERNAME` | Database user shared with PostgreSQL initialization |
+| `KC_DB_PASSWORD` | Database password; supply an explicit secret |
+| `KEYCLOAK_ADMIN` | Existing bootstrap admin variable used by this Compose file |
+| `KEYCLOAK_ADMIN_PASSWORD` | Existing bootstrap admin password variable; supply an explicit secret |
+| `SERVICE_FQDN_KEYCLOAK` / `SERVICE_URL_KEYCLOAK` | Hostname and URL values used by the Coolify configuration |
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `KC_DB_URL` | Yes | `jdbc:postgresql://postgres:5432/keycloak` |
-| `KC_DB_USERNAME` | Yes | Database username (e.g., `keycloak`) |
-| `KC_DB_PASSWORD` | Yes | Database password |
-| `KEYCLOAK_ADMIN` | No | Admin username (default: `admin`) |
-| `KEYCLOAK_ADMIN_PASSWORD` | Yes | Admin password |
+Confirm values in the rendered Compose configuration privately. Full `docker compose config` output may contain secrets; `config --quiet` checks structure without printing them.
 
-### 4. Deploy
+## Validate and update
 
-Click **Deploy** in Coolify.
+Check startup/database errors, actual readiness, provider registration, realm keys, selected login theme, and a complete synthetic wallet login through the public hostname. Exercise did:web SD-JWT credentials, both device flows, and the issuer/revocation policies used by the deployment.
 
-The first deployment will:
-1. Build the Keycloak extension with Maven
-2. Generate realm certificates
-3. Build the optimized Keycloak image
-4. Start PostgreSQL and Keycloak
+Retain the running image digest and database/realm backup before promotion. Coolify may rebuild automatically when its configured branch changes; branch pushes are deployment events if that integration is enabled.
 
-### 5. Verify Deployment
-
-After deployment completes:
-
-1. **Check Health**: inspect Keycloak startup and readiness. The current Compose healthcheck suppresses failures; a green Coolify status alone is not sufficient.
-2. **Access Admin Console**: `https://your-domain/admin`
-3. **Login**: Use your `KEYCLOAK_ADMIN` credentials
-
-## Post-Deployment
-
-### Verify Realm Imported
-
-1. Go to **Realm Settings** → **Keys**
-2. Verify signing keys are present
-3. Go to **Identity Providers**
-4. Verify **oid4vp** provider is configured
-
-### Verify Theme Active
-
-1. Go to **Realm Settings** → **Themes**
-2. Verify **Login Theme** is set to `oid4vp`
-
-### Test OID4VP Flow
-
-1. Access the Keycloak login page
-2. You should see "Sign in with Wallet" option
-3. Clicking it should redirect to wallet authentication
-
-## Updating
-
-### Update the extension
-
-Build from this repository and test the change with `./mvnw clean verify`. Review [migration and rollback](../docs/migration.md) before changing a deployed image. This is an independent project; no external repository synchronization is required.
-
-Coolify can automatically rebuild on pushes to its configured branch. Keep unreviewed changes on a development branch until staging validation is complete.
-
-### Update Keycloak Version
-
-Edit `deployment/docker/Dockerfile` and update the Keycloak version:
-```dockerfile
-FROM quay.io/keycloak/keycloak:NEW_VERSION
-```
+Changing the Dockerfile image tag alone is not a validated runtime upgrade. Follow [migration and rollback](../docs/migration.md), test the candidate runtime and database migration, and rehearse restoration.
 
 ## Troubleshooting
 
-### Build Fails: Maven Dependencies
-
-**Symptom**: Build fails during `mvn package`
-
-**Solution**: use Java 21 and the pinned Maven wrapper; confirm the compile target matches the Keycloak version being tested.
-
-### Keycloak Won't Start
-
-**Symptom**: Container exits immediately
-
-**Solution**: Check logs for database connection errors. Verify:
-- `KC_DB_URL` is correct
-- Database credentials match between Keycloak and PostgreSQL
-
-### Realm Not Imported
-
-**Symptom**: OID4VP identity provider not visible
-
-**Solution**: 
-1. Check logs for realm import errors
-2. Verify realm JSON is in `/opt/keycloak/data/import/`
-3. Check certificate generation succeeded
-
-### SSL Certificate Issues
-
-**Symptom**: Browser shows certificate warning
-
-**Solution**: Coolify handles SSL. Check:
-1. Domain is properly configured in Coolify
-2. DNS points to Coolify server
-3. Wait for SSL certificate to provision (may take a few minutes)
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Coolify (Reverse Proxy + SSL)                              │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  Docker Network                                        │  │
-│  │                                                        │  │
-│  │  ┌──────────────┐  ┌────────────────────────────┐   │  │
-│  │  │  PostgreSQL  │  │  Keycloak + OID4VP Ext      │   │  │
-│  │  │  :5432       │  │  :8080                       │   │  │
-│  │  │              │  │  - openkyc-partners realm    │   │  │
-│  │  │              │  │  - OID4VP IdP configured     │   │  │
-│  │  └──────────────┘  └────────────────────────────┘   │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## License
-
-This deployment configuration is part of the [keycloak-extension-oid4vp](https://github.com/su-engineering/keycloak-extension-oid4vp) project.
-
-## Existing deployment compatibility
-
-The Dockerfile remains on Keycloak 26.5.4; the Maven/root Compose baseline is 26.5.5. CI tests both versions. The image build copies exactly one provider JAR and uses the checked-in Maven wrapper.
-
-These files describe the existing OpenKYC deployment, not hardened defaults for an arbitrary production installation. Example credentials, realm import initialization, signing-key storage, and the healthcheck need review before public distribution; see [enterprise readiness](../docs/enterprise-readiness.md).
-
-When running this nested Compose file directly from a checkout, use the repository root as the project directory:
-
-```sh
-docker compose --project-directory . -f deployment/docker-compose.coolify.yml config --quiet
-```
+Start with [operations](../docs/operations.md). For deployment-specific failures, inspect database connectivity, Coolify network membership, the configured external scheme/host, final realm import contents, and proxy handling of the SSE stream. A green Compose health status is insufficient with the current probe.

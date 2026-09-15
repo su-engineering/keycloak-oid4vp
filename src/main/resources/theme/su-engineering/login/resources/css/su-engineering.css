@@ -1,0 +1,99 @@
+/* Copyright 2026 su-engineering. SPDX-License-Identifier: Apache-2.0 */
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("../fonts/JetBrainsMono-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+:root {
+    --su-bg: #f5f5f2;
+    --su-surface: #fafaf8;
+    --su-paper: #fff;
+    --su-text: #111;
+    --su-muted: #60605c;
+    --su-border: #deded8;
+    --su-fire: #ff4500;
+    --su-water: #3457d5;
+    --su-mono: "JetBrains Mono", ui-monospace, monospace;
+    --su-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.su-wallet-page, .login-pf body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--su-bg);
+    color: var(--su-text);
+    font: 400 16px/1.6 var(--su-sans);
+    -webkit-font-smoothing: antialiased;
+}
+.su-wallet-page *, .su-wallet-page *::before, .su-wallet-page *::after { box-sizing: border-box; }
+.su-wallet-page a { color: inherit; text-underline-offset: 4px; }
+.su-wallet-page a:hover { text-decoration-thickness: 2px; }
+.su-wallet-page a:focus-visible, .login-pf a:focus-visible, .login-pf button:focus-visible, .login-pf input:focus-visible {
+    outline: 3px solid var(--su-water);
+    outline-offset: 4px;
+}
+.su-shell { width: min(960px, calc(100% - 96px)); margin: 0 auto; }
+.su-masthead { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; padding: 40px 0 28px; border-bottom: 1px solid var(--su-border); }
+.su-wordmark { font: 400 19px/1.4 var(--su-mono); letter-spacing: -.7px; }
+.su-realm { color: var(--su-muted); font-size: 14px; overflow-wrap: anywhere; text-align: end; }
+.su-main { padding: 72px 0 64px; }
+.su-wallet-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 72px; align-items: start; }
+.su-wallet-grid--single { grid-template-columns: minmax(0, 520px); }
+.su-intro { padding-top: 12px; }
+.su-intro h1 { margin: 0 0 24px; font: 400 clamp(28px, 3.4vw, 38px)/1.25 var(--su-mono); letter-spacing: -1.8px; max-width: 12em; }
+.su-lead { margin: 0 0 32px; max-width: 36ch; color: var(--su-muted); font-size: 17px; }
+.su-button { min-height: 52px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; background: var(--su-fire); border: 1px solid var(--su-fire); border-radius: 3px; text-decoration: none; font-weight: 600; }
+.su-button:hover { background: #ed4000; border-color: #ed4000; }
+.su-button svg { flex-shrink: 0; }
+.su-hint { margin: 12px 0 0; color: var(--su-muted); font-size: 13px; }
+.su-review { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--su-border); }
+.su-review h2, .su-qr-panel h2 { margin: 0 0 12px; font: 400 17px/1.5 var(--su-mono); letter-spacing: -.5px; }
+.su-review p { margin: 0; color: var(--su-muted); font-size: 14px; max-width: 42ch; }
+.su-qr-panel { padding: 28px; background: var(--su-surface); border: 1px solid var(--su-border); border-radius: 4px; }
+.su-qr-panel > p { margin: 0 0 24px; color: var(--su-muted); font-size: 14px; }
+.su-qr-frame { width: fit-content; max-width: 100%; margin: 0 auto; background: var(--su-paper); padding: 16px; border: 1px solid var(--su-border); border-radius: 3px; }
+.su-qr-frame img { display: block; max-width: 100%; height: auto; aspect-ratio: 1; }
+.su-qr-panel .su-qr-caption { margin: 20px auto 0; font-size: 13px; max-width: 30ch; text-align: center; }
+.su-footer { border-top: 1px solid var(--su-border); display: flex; justify-content: space-between; gap: 24px; padding: 24px 0 40px; color: var(--su-muted); font-size: 13px; }
+.su-alternatives { margin-top: 40px; border-top: 1px solid var(--su-border); padding-top: 24px; font-size: 14px; }
+.su-alternatives p { color: var(--su-muted); margin: 0 0 12px; }
+.su-alternatives a { display: inline-block; margin-inline-end: 24px; padding: 8px 0; }
+.su-alert { margin: 0 0 24px; padding: 16px; border-inline-start: 3px solid var(--su-water); background: #eceffc; overflow-wrap: anywhere; }
+.su-alert--error { background: #fff0ed; border-color: #b72d0d; }
+.su-skip-link { position: absolute; left: 24px; top: -100px; padding: 12px; background: white; z-index: 1; }
+.su-skip-link:focus { top: 12px; }
+/* Keep Keycloak's form templates, validation and accessibility behavior. */
+.login-pf { background: var(--su-bg); }
+.login-pf-page { padding: 40px 24px; }
+#kc-header-wrapper { padding: 16px 0 24px; color: var(--su-text); font: 400 19px/1.5 var(--su-mono); letter-spacing: -.7px; text-transform: none; }
+.login-pf-page .card-pf { max-width: 480px; border: 1px solid var(--su-border); border-radius: 4px; background: var(--su-surface); box-shadow: none; padding: 40px; }
+#kc-page-title { font: 400 25px/1.35 var(--su-mono); letter-spacing: -1px; text-align: start; }
+.login-pf-page .login-pf-header { margin-bottom: 28px; }
+.login-pf a { color: var(--su-water); }
+.login-pf .pf-c-form-control { min-height: 44px; border: 1px solid #8a8a84; border-radius: 3px; color: var(--su-text); background: var(--su-paper); font-size: 16px; }
+.login-pf .pf-c-button.pf-m-primary { min-height: 48px; color: var(--su-text); background: var(--su-fire); border-radius: 3px; font-weight: 600; }
+.login-pf .pf-c-button.pf-m-primary:hover { background: #ed4000; }
+.login-pf .kc-social-links .kc-social-item { color: var(--su-text); background: var(--su-paper); border: 1px solid #8a8a84; border-radius: 3px; min-height: 44px; }
+.login-pf .kc-social-links .kc-social-item::after, .login-pf .pf-c-button.pf-m-primary::after { border: none; }
+#kc-info-wrapper { background: transparent; padding: 24px 0 0; }
+.su-form-footer { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--su-border); color: var(--su-muted); }
+.su-form-footer .su-wordmark { font-size: 13px; }
+@media (max-width: 720px) {
+    .su-shell { width: min(460px, calc(100% - 40px)); }
+    .su-masthead { padding: 24px 0 20px; gap: 16px; flex-wrap: wrap; }
+    .su-wordmark { font-size: 16px; }
+    .su-realm { font-size: 12px; }
+    .su-main { padding: 36px 0; }
+    .su-wallet-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+    .su-intro { padding: 0; }
+    .su-intro h1 { font-size: 30px; letter-spacing: -1.5px; }
+    .su-lead { font-size: 16px; margin-bottom: 24px; }
+    .su-review { margin-top: 28px; padding-top: 20px; }
+    .su-qr-panel { padding: 24px; }
+    .su-footer { flex-wrap: wrap; gap: 12px; padding-bottom: 28px; }
+    .login-pf-page { padding: 24px 20px; }
+    .login-pf-page .card-pf { padding: 24px; }
+    #kc-header-wrapper { padding: 0 0 24px; text-align: start; }
+}

@@ -34,6 +34,12 @@ Example realm import fragment:
 }
 ```
 
+## Configuration checklist
+
+Before choosing defaults, establish the wallet's verifier-authentication requirements, accepted credential issuers and types, claim mapping, user persistence model, and status/revocation policy. A successful demo configuration is not a complete trust policy.
+
+The snippets in this document are fragments. Do not place private signing keys in tracked realm JSON. Select the login theme through the realm's `loginTheme` property; see [themes](themes.md).
+
 ## Settings
 
 ### Credential Request
@@ -108,13 +114,14 @@ This mode is intended for credentials that do not carry a stable account identif
 | `clockSkewSeconds` | Clock skew tolerance for credential verification. | `60` |
 | `kbJwtMaxAgeSeconds` | Maximum accepted age of the SD-JWT KB-JWT `iat` claim. | `300` |
 
-For SD-JWT VC verification, the verifier tries issuer-key resolution in this order:
+For SD-JWT VC verification, issuer-key resolution follows this order:
 
-1. `x5c` certificate-chain validation against the trust list
-2. When HAIP is disabled, JWT VC issuer metadata lookup via `iss` + JOSE `kid` from `/.well-known/jwt-vc-issuer`, including `jwks_uri`
-3. Final direct trusted-certificate fallback for non-HAIP deployments
+1. If enabled and the issuer is a supported DID, resolve did:web keys. This step precedes strict X.509 handling; resolution failure falls through to the existing paths.
+2. Validate an `x5c` certificate chain against the configured trust list.
+3. Outside strict X.509 mode, try JWT VC issuer metadata via `iss` and JOSE `kid` at `/.well-known/jwt-vc-issuer`, including `jwks_uri`.
+4. Outside strict X.509 mode, try direct trusted certificates as the final fallback.
 
-When `enforceHaip=true`, only the `x5c` path is attempted.
+With DID resolution disabled, `enforceHaip=true` restricts this to the `x5c` path. With DID resolution enabled, the earlier DID path is still attempted. Use `enforceHaip=false` for the existing DID flow and read the [DID limitations](#didweb-issuer-verification).
 
 By default, the verifier only trusts the credential types this IdP actually requested in its DCQL query. Those types come from:
 

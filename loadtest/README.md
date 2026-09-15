@@ -29,13 +29,13 @@ What it does not cover:
 
 ## Files
 
-- [oid4vp-cross-device.js](/Users/dominik/projects/keycloak-extension-oid4vp/loadtest/oid4vp-cross-device.js)
+- [oid4vp-cross-device.js](oid4vp-cross-device.js)
   k6 browser scenario
-- [run-k6-browser.sh](/Users/dominik/projects/keycloak-extension-oid4vp/loadtest/run-k6-browser.sh)
+- [run-k6-browser.sh](run-k6-browser.sh)
   wrapper around the browser-enabled k6 image
-- [docker-compose.cluster.yml](/Users/dominik/projects/keycloak-extension-oid4vp/loadtest/docker-compose.cluster.yml)
+- [docker-compose.cluster.yml](docker-compose.cluster.yml)
   local two-node Keycloak cluster plus mock wallet
-- [haproxy.cfg](/Users/dominik/projects/keycloak-extension-oid4vp/loadtest/haproxy.cfg)
+- [haproxy.cfg](haproxy.cfg)
   front door for the local cluster
 
 ## Local Cluster

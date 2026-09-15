@@ -1,0 +1,22 @@
+name: Feature request
+description: Describe an integration need or improvement.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who needs this, and what are they trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired outcome and any alternatives considered.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility considerations
+      description: Effects on existing wallets, issuers, realm configuration, or Keycloak versions.

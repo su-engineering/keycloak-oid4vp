@@ -1,12 +1,12 @@
 # OID4VP Request Flow — Code Walkthrough
 
-This document traces the OID4VP authorization request through the code for both same-device and cross-device flows.
+This document traces the OID4VP authorization request through the code for both same-device and cross-device flows. Start with [the diagrams](diagrams.md) for an overview. Security properties described here are implementation behavior, not a completed security audit; see [known limitations](enterprise-readiness.md).
 
 ## Key Concepts
 
 ### The `request_handle`
 
-The `request_handle` is a unique, unguessable token generated once per rendered browser flow. It is the stable handle for the browser-side login attempt.
+The `request_handle` is a unique, unguessable token generated once for each enabled device flow when a login page is rendered. It is the stable handle for the browser-side login attempt.
 
 1. **Flow lookup** — maps the browser flow back to the stored flow context `{rootSessionId, tabId, effectiveClientId, responseUri, flow}`.
 2. **Completion handle** — identifies which deferred authentication result `/complete-auth` should consume after a successful wallet callback.
@@ -131,6 +131,7 @@ This:
 - Calls `VpTokenProcessor.process(vpToken, clientId, nonce, responseUri, mdocGeneratedNonce, encryptionJwkThumbprint)`:
   - SD-JWT: `SdJwtVerifier.verify()` — delegates to Keycloak's `SdJwtVP.verify()` which performs:
     1. **Issuer signature verification** — validates the SD-JWT's JWS signature using the issuer's public key, resolved in this order:
+       - when DID resolution is enabled and the issuer is supported: did:web public keys (`DidWebResolver`), before strict X.509 handling; resolution failure falls through
        - `x5c` certificate-chain validation against the trust list (`X5cChainValidator`)
        - outside HAIP only: JWT VC issuer metadata lookup via `iss` + JOSE `kid` (`JwtVcIssuerMetadataResolver`), including `jwks_uri`
        - final direct trusted-certificate fallback for non-HAIP deployments that use self-signed or directly trusted issuer keys
@@ -144,7 +145,7 @@ This:
     - **ISO 18013-7** (Annex B.4.4): `[null, null, [SHA-256(CBOR([client_id, mdoc_generated_nonce])), SHA-256(CBOR([response_uri, mdoc_generated_nonce])), nonce]]` — used as a fallback when `mdocGeneratedNonce` is present (extracted from JWE `apu` header) and the OID4VP 1.0 transcript does not verify
   - Checks revocation via `StatusListVerifier`
   - Validates the fetched trust list's `LoTEType` against the IdP's configured trust domain
-- Validates issuer is allowed, credential type is allowed
+- Applies the issuer allow-list to the primary credential and validates credential types; policy enforcement for every credential in multi-credential responses needs further review
 - Rejects credentials whose `vct` / `docType` was not explicitly requested by this IdP's DCQL query
 - Maps claims to `BrokeredIdentityContext`
 

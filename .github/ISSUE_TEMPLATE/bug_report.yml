@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible problem using synthetic data.
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, email security@su.engineering privately. Do not include keys, tokens, cookies, or real presentations."
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Extension revision, Keycloak and Java versions, wallet, credential format, and deployment topology.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal steps and redacted configuration using synthetic credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs or screenshots
+      description: Include only the relevant errors. Remove personal data and live authentication material.
