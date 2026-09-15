@@ -1,0 +1,68 @@
+services:
+  keycloak:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile
+    expose:
+      - "8080"
+    labels:
+      - coolify.port=8080
+      - traefik.docker.network=coolify
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak}
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
+      KC_HOSTNAME: ${SERVICE_FQDN_KEYCLOAK:-localhost}
+      KC_HOSTNAME_URL: ${SERVICE_URL_KEYCLOAK:-http://localhost:8080}
+      KC_HOSTNAME_ADMIN_URL: ${SERVICE_URL_KEYCLOAK:-http://localhost:8080}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      SERVICE_FQDN_KEYCLOAK_8080:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    command: ["start", "--optimized", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready 2>/dev/null || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 240s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: ${KC_DB_USERNAME:-keycloak}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME:-keycloak}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  default:
+    name: coolify
+    external: true

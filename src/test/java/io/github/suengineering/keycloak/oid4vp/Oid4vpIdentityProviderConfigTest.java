@@ -1,0 +1,301 @@
+/*
+ * Copyright 2026 Bundesagentur für Arbeit
+ * Modified by su-engineering: package namespace migration (2026).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.suengineering.keycloak.oid4vp;
+
+import static org.assertj.core.api.Assertions.*;
+
+import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
+import java.time.Duration;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class Oid4vpIdentityProviderConfigTest {
+
+    private Oid4vpIdentityProviderConfig config;
+
+    @BeforeEach
+    void setUp() {
+        config = new Oid4vpIdentityProviderConfig();
+    }
+
+    @Test
+    void isIssuerAllowed_wildcard_allowsAll() {
+        config.setAllowedIssuers("*");
+        assertThat(config.isIssuerAllowed("https://any-issuer.example")).isTrue();
+    }
+
+    @Test
+    void isIssuerAllowed_empty_allowsAll() {
+        assertThat(config.isIssuerAllowed("https://any-issuer.example")).isTrue();
+    }
+
+    @Test
+    void isIssuerAllowed_specificList_matchesExact() {
+        config.setAllowedIssuers("https://issuer1.example,https://issuer2.example");
+        assertThat(config.isIssuerAllowed("https://issuer1.example")).isTrue();
+        assertThat(config.isIssuerAllowed("https://issuer2.example")).isTrue();
+        assertThat(config.isIssuerAllowed("https://other.example")).isFalse();
+    }
+
+    @Test
+    void isIssuerAllowed_nullIssuer_notAllowed() {
+        config.setAllowedIssuers("https://issuer1.example");
+        assertThat(config.isIssuerAllowed(null)).isFalse();
+    }
+
+    @Test
+    void defaultValues() {
+        assertThat(config.getUserMappingClaim()).isEqualTo("sub");
+        assertThat(config.getClientIdScheme()).isEqualTo("x509_hash");
+        assertThat(config.getResponseMode()).isEqualTo("direct_post.jwt");
+        assertThat(config.isTransientUsersEnabled()).isFalse();
+        assertThat(config.isSameDeviceEnabled()).isTrue();
+        assertThat(config.isCrossDeviceEnabled()).isTrue();
+        assertThat(config.isEnforceHaip()).isTrue();
+        assertThat(config.getCredentialSetMode()).isEqualTo("optional");
+        assertThat(config.isAllCredentialsRequired()).isFalse();
+    }
+
+    @Test
+    void transientUsersEnabled_readsDoNotStoreUsersFlag() {
+        config.setTransientUsersEnabled(true);
+
+        assertThat(config.isTransientUsersEnabled()).isTrue();
+    }
+
+    @Test
+    void haipEnabled_useIdTokenSubject_isForcedFalse() {
+        config.setEnforceHaip(true);
+        config.setUseIdTokenSubject(true);
+
+        assertThat(config.isUseIdTokenSubject()).isFalse();
+    }
+
+    @Test
+    void useIdTokenSubject_respectsConfiguredValueWhenHaipDisabled() {
+        config.setEnforceHaip(false);
+        config.setUseIdTokenSubject(true);
+
+        assertThat(config.isUseIdTokenSubject()).isTrue();
+    }
+
+    @Test
+    void haipEnabled_clientIdScheme_overridesToX509Hash() {
+        config.setEnforceHaip(true);
+        config.setClientIdScheme("x509_san_dns");
+        assertThat(config.getClientIdScheme()).isEqualTo("x509_hash");
+    }
+
+    @Test
+    void haipEnabled_clientIdScheme_keepsX509Hash() {
+        config.setEnforceHaip(true);
+        config.setClientIdScheme("x509_hash");
+        assertThat(config.getClientIdScheme()).isEqualTo("x509_hash");
+    }
+
+    @Test
+    void haipEnabled_clientIdScheme_overridesPlainToX509Hash() {
+        config.setEnforceHaip(true);
+        config.setClientIdScheme("plain");
+        assertThat(config.getClientIdScheme()).isEqualTo("x509_hash");
+    }
+
+    @Test
+    void clientIdScheme_respectsConfiguredValueWhenHaipDisabled() {
+        config.setEnforceHaip(false);
+        config.setClientIdScheme("x509_san_dns");
+        assertThat(config.getClientIdScheme()).isEqualTo("x509_san_dns");
+    }
+
+    @Test
+    void clientIdScheme_defaultsToX509SanDnsWhenUnset() {
+        config.setEnforceHaip(false);
+        assertThat(config.getClientIdScheme()).isEqualTo("x509_san_dns");
+    }
+
+    @Test
+    void haipEnabled_responseMode_overridesToDirectPostJwt() {
+        config.setEnforceHaip(true);
+        config.setResponseMode("direct_post");
+        assertThat(config.getResponseMode()).isEqualTo("direct_post.jwt");
+    }
+
+    @Test
+    void responseMode_respectsConfiguredEncryptedModeWhenHaipDisabled() {
+        config.setEnforceHaip(false);
+        config.setResponseMode("direct_post.jwt");
+        assertThat(config.getResponseMode()).isEqualTo("direct_post.jwt");
+    }
+
+    @Test
+    void responseMode_defaultsToDirectPostWhenHaipDisabled() {
+        config.setEnforceHaip(false);
+        assertThat(config.getResponseMode()).isEqualTo("direct_post");
+    }
+
+    @Test
+    void getUserMappingClaimMdoc_fallsBackToSdJwtClaim() {
+        config.setUserMappingClaim("email");
+        assertThat(config.getUserMappingClaimMdoc()).isEqualTo("email");
+    }
+
+    @Test
+    void getUserMappingClaimMdoc_usesMdocSpecificIfSet() {
+        config.setUserMappingClaim("email");
+        config.setUserMappingClaimMdoc("org.iso.18013.5.1/email");
+        assertThat(config.getUserMappingClaimMdoc()).isEqualTo("org.iso.18013.5.1/email");
+    }
+
+    @Test
+    void getUserMappingClaimForFormat_sdJwt() {
+        config.setUserMappingClaim("sub");
+        assertThat(config.getUserMappingClaimForFormat("dc+sd-jwt")).isEqualTo("sub");
+    }
+
+    @Test
+    void getUserMappingClaimForFormat_mdoc() {
+        config.setUserMappingClaim("sub");
+        config.setUserMappingClaimMdoc("mdoc-sub");
+        assertThat(config.getUserMappingClaimForFormat("mso_mdoc")).isEqualTo("mdoc-sub");
+    }
+
+    @Test
+    void sseDefaults() {
+        assertThat(config.getSsePollIntervalMs()).isEqualTo(2000);
+        assertThat(config.getSseTimeoutSeconds()).isEqualTo(120);
+        assertThat(config.getSsePingIntervalSeconds()).isEqualTo(10);
+        assertThat(config.getCrossDeviceCompleteTtlSeconds()).isEqualTo(300);
+    }
+
+    @Test
+    void sseCustomValues() {
+        config.setSsePollIntervalMs(500);
+        config.setSseTimeoutSeconds(60);
+        config.setSsePingIntervalSeconds(5);
+        config.setCrossDeviceCompleteTtlSeconds(600);
+
+        assertThat(config.getSsePollIntervalMs()).isEqualTo(500);
+        assertThat(config.getSseTimeoutSeconds()).isEqualTo(60);
+        assertThat(config.getSsePingIntervalSeconds()).isEqualTo(5);
+        assertThat(config.getCrossDeviceCompleteTtlSeconds()).isEqualTo(600);
+    }
+
+    @Test
+    void statusListMaxCacheTtl_defaultIsNull() {
+        assertThat(config.getStatusListMaxCacheTtl()).isNull();
+    }
+
+    @Test
+    void statusListMaxCacheTtl_parsesSeconds() {
+        config.setStatusListMaxCacheTtlSeconds(30);
+        assertThat(config.getStatusListMaxCacheTtl()).isEqualTo(Duration.ofSeconds(30));
+    }
+
+    @Test
+    void statusListMaxCacheTtl_zeroDisablesCaching() {
+        config.setStatusListMaxCacheTtlSeconds(0);
+        assertThat(config.getStatusListMaxCacheTtl()).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    void issuerMetadataMaxCacheTtl_defaultsToOneDay() {
+        assertThat(config.getIssuerMetadataMaxCacheTtl()).isEqualTo(Duration.ofDays(1));
+    }
+
+    @Test
+    void issuerMetadataMaxCacheTtl_parsesSeconds() {
+        config.setIssuerMetadataMaxCacheTtlSeconds(45);
+        assertThat(config.getIssuerMetadataMaxCacheTtl()).isEqualTo(Duration.ofSeconds(45));
+    }
+
+    @Test
+    void statusListMaxCacheTtl_invalidFallsBackToNull() {
+        config.getConfig().put(Oid4vpIdentityProviderConfig.STATUS_LIST_MAX_CACHE_TTL_SECONDS, "not-a-number");
+        assertThat(config.getStatusListMaxCacheTtl()).isNull();
+    }
+
+    @Test
+    void trustListMaxCacheTtl_defaultIsNull() {
+        assertThat(config.getTrustListMaxCacheTtl()).isNull();
+    }
+
+    @Test
+    void trustListMaxCacheTtl_parsesSeconds() {
+        config.setTrustListMaxCacheTtlSeconds(120);
+        assertThat(config.getTrustListMaxCacheTtl()).isEqualTo(Duration.ofSeconds(120));
+    }
+
+    @Test
+    void trustedAuthoritiesMode_defaultsToNone() {
+        assertThat(config.getTrustedAuthoritiesMode()).isEqualTo(Oid4vpTrustedAuthoritiesMode.NONE);
+    }
+
+    @Test
+    void trustedAuthoritiesMode_readsEtsiTl() {
+        config.setTrustedAuthoritiesMode("etsi_tl");
+        assertThat(config.getTrustedAuthoritiesMode()).isEqualTo(Oid4vpTrustedAuthoritiesMode.ETSI_TL);
+    }
+
+    @Test
+    void trustedAuthoritiesMode_readsAki() {
+        config.setTrustedAuthoritiesMode("aki");
+        assertThat(config.getTrustedAuthoritiesMode()).isEqualTo(Oid4vpTrustedAuthoritiesMode.AKI);
+    }
+
+    @Test
+    void trustedAuthoritiesMode_invalidFallsBackToNone() {
+        config.setTrustedAuthoritiesMode("bogus");
+        assertThat(config.getTrustedAuthoritiesMode()).isEqualTo(Oid4vpTrustedAuthoritiesMode.NONE);
+    }
+
+    @Test
+    void trustListLoTEType_defaultsToEmpty() {
+        assertThat(config.getTrustListLoTEType()).isNull();
+    }
+
+    @Test
+    void trustListLoTEType_readsConfiguredValue() {
+        config.setTrustListLoTEType("http://uri.etsi.org/19602/LoTEType/EUWalletProvidersList");
+        assertThat(config.getTrustListLoTEType()).isEqualTo("http://uri.etsi.org/19602/LoTEType/EUWalletProvidersList");
+    }
+
+    @Test
+    void requestObjectLifespan_default() {
+        assertThat(config.getRequestObjectLifespanSeconds()).isEqualTo(10);
+    }
+
+    @Test
+    void requestObjectLifespan_customValue() {
+        config.setRequestObjectLifespanSeconds(30);
+        assertThat(config.getRequestObjectLifespanSeconds()).isEqualTo(30);
+    }
+
+    @Test
+    void requestObjectLifespan_invalidFallsBackToDefault() {
+        config.getConfig().put("requestObjectLifespanSeconds", "not-a-number");
+        assertThat(config.getRequestObjectLifespanSeconds()).isEqualTo(10);
+    }
+
+    @Test
+    void sseInvalidIntFallsBackToDefault() {
+        config.getConfig().put("ssePollIntervalMs", "not-a-number");
+        config.getConfig().put("sseTimeoutSeconds", "");
+
+        assertThat(config.getSsePollIntervalMs()).isEqualTo(2000);
+        assertThat(config.getSseTimeoutSeconds()).isEqualTo(120);
+    }
+}

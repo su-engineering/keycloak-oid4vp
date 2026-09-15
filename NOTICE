@@ -1,0 +1,16 @@
+keycloak-extension-oid4vp
+Maintained independently by su-engineering.
+
+This product includes software developed by Bundesagentur für Arbeit,
+originally distributed as ba-itsys/keycloak-extension-oid4vp:
+https://github.com/ba-itsys/keycloak-extension-oid4vp
+Copyright 2026 Bundesagentur für Arbeit.
+Licensed under the Apache License, Version 2.0; see LICENSE.
+
+Modifications by su-engineering contributors include did:web credential
+verification, OpenKYC login themes, deployment configuration, and the
+independent package namespace, documentation, and development tooling.
+Modified source files retain their original copyright notices.
+
+This attribution does not imply affiliation with or endorsement by the
+original authors. Project ownership, development, and releases are independent.

@@ -1,0 +1,302 @@
+/*
+ * Copyright 2026 Bundesagentur für Arbeit
+ * Modified by su-engineering: package namespace migration (2026).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.suengineering.keycloak.oid4vp.verification;
+
+import static org.assertj.core.api.Assertions.*;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jose.JOSEObjectType;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.ECDSASigner;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
+import com.nimbusds.jose.util.Base64;
+import com.nimbusds.jose.util.Base64URL;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import io.github.suengineering.keycloak.oid4vp.domain.PresentationType;
+import io.github.suengineering.keycloak.oid4vp.domain.VerifiedCredential;
+import io.github.suengineering.keycloak.oid4vp.domain.VpTokenResult;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPublicKey;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import javax.security.auth.x500.X500Principal;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.keycloak.broker.provider.IdentityBrokerException;
+import org.keycloak.common.crypto.CryptoIntegration;
+
+class VpTokenProcessorTest {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private VpTokenProcessor processor;
+    private ECKey signingKey;
+    private ECKey holderKey;
+    private X509Certificate signingCert;
+
+    @BeforeAll
+    static void initCrypto() {
+        CryptoIntegration.init(VpTokenProcessorTest.class.getClassLoader());
+    }
+
+    @BeforeEach
+    void setUp() throws Exception {
+        signingKey = new ECKeyGenerator(Curve.P_256).generate();
+        holderKey = new ECKeyGenerator(Curve.P_256).generate();
+        signingCert = generateSelfSignedCert(signingKey);
+        TrustListProvider trustListProvider = new TrustListProvider(List.of(signingCert));
+        processor = new VpTokenProcessor(objectMapper, new StatusListVerifier(), trustListProvider);
+    }
+
+    @Test
+    void process_singleSdJwt_returnsResult() throws Exception {
+        String credJwt = buildSdJwt(Map.of(
+                "iss",
+                "https://issuer.example",
+                "vct",
+                "IdentityCredential",
+                "sub",
+                "user1",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String sdJwt = buildSdJwtVpWithKbJwt(credJwt, "client-id", "nonce");
+
+        VpTokenResult result = processor.process(request(sdJwt, "client-id", "nonce", null));
+
+        assertThat(result.credentials()).hasSize(1);
+        VerifiedCredential primary = result.getPrimaryCredential();
+        assertThat(primary.presentationType()).isEqualTo(PresentationType.SD_JWT);
+        assertThat(primary.issuer()).isEqualTo("https://issuer.example");
+        assertThat(primary.credentialType()).isEqualTo("IdentityCredential");
+        assertThat(result.mergedClaims()).containsEntry("sub", "user1");
+    }
+
+    @Test
+    void process_multiCredentialWrapperWithDifferentTypes_throws() throws Exception {
+        String credJwt1 = buildSdJwt(Map.of(
+                "iss",
+                "issuer1",
+                "vct",
+                "Type1",
+                "name",
+                "Alice",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String credJwt2 = buildSdJwt(Map.of(
+                "iss",
+                "issuer2",
+                "vct",
+                "Type2",
+                "email",
+                "alice@test.com",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String sdJwt1 = buildSdJwtVpWithKbJwt(credJwt1, "client-id", "nonce");
+        String sdJwt2 = buildSdJwtVpWithKbJwt(credJwt2, "client-id", "nonce");
+
+        Map<String, Object> wrapper = new LinkedHashMap<>();
+        wrapper.put("cred1", sdJwt1);
+        wrapper.put("cred2", sdJwt2);
+
+        assertThatThrownBy(() -> processor.process(
+                        request(objectMapper.writeValueAsString(wrapper), "client-id", "nonce", null)))
+                .isInstanceOf(IdentityBrokerException.class)
+                .hasMessageContaining("Only one credential type is currently supported");
+    }
+
+    @Test
+    void process_multiCredentialWrapperWithSameType_usesFirstCredential() throws Exception {
+        String credJwt1 = buildSdJwt(Map.of(
+                "iss",
+                "issuer1",
+                "vct",
+                "IdentityCredential",
+                "name",
+                "Alice",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String credJwt2 = buildSdJwt(Map.of(
+                "iss",
+                "issuer2",
+                "vct",
+                "IdentityCredential",
+                "email",
+                "alice@test.com",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String sdJwt1 = buildSdJwtVpWithKbJwt(credJwt1, "client-id", "nonce");
+        String sdJwt2 = buildSdJwtVpWithKbJwt(credJwt2, "client-id", "nonce");
+
+        Map<String, Object> wrapper = new LinkedHashMap<>();
+        wrapper.put("cred1", sdJwt1);
+        wrapper.put("cred2", sdJwt2);
+
+        VpTokenResult result =
+                processor.process(request(objectMapper.writeValueAsString(wrapper), "client-id", "nonce", null));
+
+        assertThat(result.credentials()).hasSize(1);
+        assertThat(result.getPrimaryCredential().credentialId()).isEqualTo("cred1");
+        assertThat(result.getPrimaryCredential().credentialType()).isEqualTo("IdentityCredential");
+        assertThat(result.mergedClaims()).containsEntry("name", "Alice");
+    }
+
+    @Test
+    void process_wrapperEntryWithSameType_usesFirstCredential() throws Exception {
+        String credJwt1 = buildSdJwt(Map.of(
+                "iss",
+                "issuer1",
+                "vct",
+                "IdentityCredential",
+                "name",
+                "Alice",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String credJwt2 = buildSdJwt(Map.of(
+                "iss",
+                "issuer2",
+                "vct",
+                "IdentityCredential",
+                "email",
+                "alice@test.com",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String sdJwt1 = buildSdJwtVpWithKbJwt(credJwt1, "client-id", "nonce");
+        String sdJwt2 = buildSdJwtVpWithKbJwt(credJwt2, "client-id", "nonce");
+
+        String wrapper = objectMapper.writeValueAsString(Map.of("cred1", List.of(sdJwt1, sdJwt2)));
+
+        VpTokenResult result = processor.process(request(wrapper, "client-id", "nonce", null));
+
+        assertThat(result.credentials()).hasSize(1);
+        assertThat(result.getPrimaryCredential().credentialId()).isEqualTo("cred1");
+        assertThat(result.getPrimaryCredential().credentialType()).isEqualTo("IdentityCredential");
+        assertThat(result.mergedClaims()).containsEntry("name", "Alice");
+    }
+
+    @Test
+    void process_unsupportedFormat_throws() {
+        assertThatThrownBy(() -> processor.process(request("not-sd-jwt-or-mdoc", "client-id", "nonce", null)))
+                .isInstanceOf(IdentityBrokerException.class)
+                .hasMessageContaining("Unsupported VP token format");
+    }
+
+    @Test
+    void process_nullVpToken_throws() {
+        assertThatThrownBy(() -> processor.process(request(null, "client-id", "nonce", null)))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void process_sdJwtWithFallback_usesAlternateUri() throws Exception {
+        String credJwt = buildSdJwt(Map.of(
+                "iss",
+                "https://issuer.example",
+                "sub",
+                "user1",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        // KB-JWT audience is the alternate URI, not the client-id
+        String sdJwt = buildSdJwtVpWithKbJwt(credJwt, "https://alternate.example", "nonce");
+
+        VpTokenResult result = processor.process(request(sdJwt, "client-id", "nonce", "https://alternate.example"));
+
+        assertThat(result.getPrimaryCredential()).isNotNull();
+    }
+
+    // ===== Helper Methods =====
+
+    private JWSHeader buildHeaderWithX5c() throws Exception {
+        return new JWSHeader.Builder(JWSAlgorithm.ES256)
+                .x509CertChain(List.of(Base64.encode(signingCert.getEncoded())))
+                .build();
+    }
+
+    private String buildSdJwt(Map<String, Object> claimsMap) throws Exception {
+        JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder();
+        for (var entry : claimsMap.entrySet()) {
+            builder.claim(entry.getKey(), entry.getValue());
+        }
+        Instant now = Instant.now();
+        builder.issueTime(Date.from(now));
+        builder.notBeforeTime(Date.from(now));
+        builder.expirationTime(Date.from(now.plusSeconds(3600)));
+
+        SignedJWT signedJWT = new SignedJWT(buildHeaderWithX5c(), builder.build());
+        signedJWT.sign(new ECDSASigner(signingKey));
+        return signedJWT.serialize();
+    }
+
+    private String buildSdJwtVpWithKbJwt(String credJwt, String audience, String nonce) throws Exception {
+        String unboundPresentation = credJwt + "~";
+
+        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+        byte[] hash = sha256.digest(unboundPresentation.getBytes(StandardCharsets.US_ASCII));
+        String sdHash = Base64URL.encode(hash).toString();
+
+        JWTClaimsSet kbClaims = new JWTClaimsSet.Builder()
+                .audience(audience)
+                .claim("nonce", nonce)
+                .claim("sd_hash", sdHash)
+                .issueTime(new Date())
+                .build();
+        SignedJWT kbJwt = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.ES256)
+                        .type(new JOSEObjectType("kb+jwt"))
+                        .build(),
+                kbClaims);
+        kbJwt.sign(new ECDSASigner(holderKey));
+
+        return unboundPresentation + kbJwt.serialize();
+    }
+
+    private static X509Certificate generateSelfSignedCert(ECKey ecKey) throws Exception {
+        ECPublicKey publicKey = ecKey.toECPublicKey();
+        X500Principal subject = new X500Principal("CN=Test SD-JWT Issuer");
+        Instant now = Instant.now();
+        JcaX509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+                subject,
+                BigInteger.valueOf(System.currentTimeMillis()),
+                Date.from(now.minus(1, ChronoUnit.HOURS)),
+                Date.from(now.plus(365, ChronoUnit.DAYS)),
+                subject,
+                publicKey);
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(ecKey.toECPrivateKey());
+
+        return new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
+    }
+
+    private static VpTokenProcessor.Request request(
+            String vpToken, String clientId, String expectedNonce, String alternateResponseUri) {
+        return new VpTokenProcessor.Request(vpToken, clientId, expectedNonce, alternateResponseUri, null, null);
+    }
+}

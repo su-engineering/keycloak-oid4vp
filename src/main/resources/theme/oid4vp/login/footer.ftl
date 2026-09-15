@@ -1,0 +1,2 @@
+<#macro content>
+</#macro>

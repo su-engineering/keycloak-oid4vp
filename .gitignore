@@ -1,0 +1,29 @@
+.idea
+*.iml
+
+target/
+dependency-reduced-pom.xml
+pom.xml.versionsBackup
+
+src/test/resources/realm-wallet-demo-local.json
+sandbox/
+docker-compose.ngrok.yml
+docker-compose.proxy.yml
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.log
+
+# macOS
+.DS_Store
+
+# Sisyphus planning
+.sisyphus/

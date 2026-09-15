@@ -1,0 +1,561 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-dark: #0a0e27;
+  --bg-card: rgba(30, 41, 59, 0.6);
+  --border-glow: rgba(99, 102, 241, 0.5);
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --accent-teal: #00d4aa;
+  --accent-blue: #6366f1;
+  --accent-coral: #ff6b6b;
+  --card-bg: rgba(30, 41, 59, 0.4);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background: var(--bg-dark) !important;
+  background-image: none !important;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+html, body, #keycloak-bg, .pf-v5-c-login, .kc-login, [class*="login"] {
+  background-image: none !important;
+  background: var(--bg-dark) !important;
+}
+
+#kc-header {
+  display: none !important;
+}
+
+.kc-login-container, .pf-v5-c-login__container, [class*="login__container"] {
+  max-width: 480px !important;
+  margin: 0 auto !important;
+  padding: 0 24px !important;
+}
+
+.kc-login-main, .pf-v5-c-login__main, [class*="login__main"] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.kc-login-main-header, .pf-v5-c-login__main-header, [class*="login__main-header"] {
+  display: none !important;
+}
+
+.kc-login-main-body, .pf-v5-c-login__main-body, [class*="login__main-body"] {
+  padding: 0 !important;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container {
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  padding: 40px 32px;
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.1),
+    0 20px 50px -10px rgba(0, 0, 0, 0.5),
+    0 0 100px -20px rgba(99, 102, 241, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), rgba(0, 212, 170, 0.5), transparent);
+}
+
+.card-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.openkyc-logo {
+  width: 80px;
+  height: 80px;
+  filter: drop-shadow(0 0 20px rgba(0, 212, 170, 0.3));
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 20px rgba(0, 212, 170, 0.3));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 30px rgba(99, 102, 241, 0.4));
+    transform: scale(1.02);
+  }
+}
+
+.shield-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.2), rgba(99, 102, 241, 0.2));
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-teal);
+}
+
+.shield-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+/* Credential Link Styles */
+.credential-link-container {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.credential-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(99, 102, 241, 0.1));
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 12px;
+  color: var(--accent-teal);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.credential-link:hover {
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.2), rgba(99, 102, 241, 0.2));
+  border-color: rgba(0, 212, 170, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px -8px rgba(0, 212, 170, 0.3);
+}
+
+.credential-link .link-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.app-subtitle {
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.verification-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 28px;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.primary-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.primary-button:hover::before {
+  left: 100%;
+}
+
+.primary-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.4);
+  border-color: rgba(99, 102, 241, 0.8);
+}
+
+.btn-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.btn-arrow {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+}
+
+.credential-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 24px;
+  color: var(--accent-coral);
+  font-size: 13px;
+  font-weight: 500;
+  margin: 16px auto;
+  width: fit-content;
+}
+
+.credential-badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+.qr-section {
+  text-align: center;
+  padding-top: 24px;
+  margin-top: 8px;
+}
+
+/* QR Code Toggle Button - Mobile Only */
+.qr-toggle-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(0, 212, 170, 0.2));
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.qr-toggle-btn:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(0, 212, 170, 0.3));
+  border-color: rgba(99, 102, 241, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.4);
+}
+
+.qr-toggle-btn .btn-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* QR Content - Hidden on mobile by default */
+.qr-content {
+  display: block;
+}
+
+.qr-content.show {
+  display: block;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.divider span {
+  white-space: nowrap;
+}
+
+.qr-wrapper {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: inline-block;
+  margin-bottom: 16px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+}
+
+.qr-image {
+  width: 200px;
+  height: 200px;
+  display: block;
+}
+
+.qr-instruction {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.how-it-works {
+  padding-top: 24px;
+  margin-top: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-header .line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), transparent);
+}
+
+.section-header span {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.step-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(99, 102, 241, 0.2);
+  transform: translateX(4px);
+}
+
+.step-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(99, 102, 241, 0.15));
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-teal);
+  flex-shrink: 0;
+}
+
+.step-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-label {
+  display: block;
+  font-size: 12px;
+  color: var(--accent-teal);
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.step-content h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.step-content p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.trust-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 12px;
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  border-radius: 8px;
+  color: var(--accent-teal);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.trust-badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 24px;
+}
+
+.footer-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.footer-link {
+  color: var(--accent-teal);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: flex;
+  }
+
+  .qr-content {
+    display: none;
+  }
+
+  .qr-content.show {
+    display: block;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none;
+  }
+
+  .qr-content {
+    display: block !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 32px 24px;
+  }
+
+  .app-title {
+    font-size: 24px;
+  }
+
+  .qr-image {
+    width: 180px;
+    height: 180px;
+  }
+
+  .credential-link {
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+
+  .openkyc-logo {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+@media (max-width: 360px) {
+  .step-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .step-icon {
+    margin: 0 auto;
+  }
+}
