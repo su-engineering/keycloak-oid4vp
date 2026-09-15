@@ -10,6 +10,7 @@ Initial independent development baseline under su-engineering.
 - Add combined DID resolution, signature, disclosure, and holder-binding regression tests.
 - Pin the wallet E2E fixture and correct stale theme assertions.
 - Document configuration, migration, rollback, and work required before enterprise support.
+- Rename the repository to `su-engineering/keycloak-oid4vp` while preserving artifact and runtime identifiers.
 - Add the opt-in neutral `su-engineering` login theme, with local fonts, responsive wallet login, and inherited Keycloak forms.
 - Add a disposable local demo, real theme screenshots, architecture diagrams, and installation/operations guides.
 - Add security reporting, contribution guidance, and bundled-theme login regression coverage.

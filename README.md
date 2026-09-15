@@ -1,4 +1,4 @@
-# Keycloak OID4VP Extension
+# Keycloak OID4VP
 
 **Digital credentials. Familiar Keycloak login.**
 
@@ -35,8 +35,8 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 You need **Java 21**, **Docker**, and a shell. Maven is downloaded by the pinned wrapper. The first run also downloads dependencies and container images.
 
 ```sh
-git clone https://github.com/su-engineering/keycloak-extension-oid4vp.git
-cd keycloak-extension-oid4vp
+git clone https://github.com/su-engineering/keycloak-oid4vp.git
+cd keycloak-oid4vp
 ./scripts/demo.sh
 ```
 

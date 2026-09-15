@@ -18,6 +18,16 @@ The namespace changes Java class names. Code that imports these classes must upd
 
 The cleanup does not change verification logic, credential acceptance policy, realm import contents, or database settings. License notices are included in the provider JAR.
 
+## Repository rename
+
+The GitHub repository is `su-engineering/keycloak-oid4vp`; the checkout directory is `keycloak-oid4vp`. Update an existing clone's remote with:
+
+```sh
+git remote set-url origin https://github.com/su-engineering/keycloak-oid4vp.git
+```
+
+This changes repository naming only. The Maven artifact ID and installed JAR remain `keycloak-extension-oid4vp` and `keycloak-extension-oid4vp.jar` to preserve existing build and deployment integrations. Provider IDs, Java packages, and realm configuration are unchanged.
+
 ## Optional neutral theme
 
 The provider also bundles `su-engineering`. Existing realm selections stay unchanged. Select it explicitly under **Realm settings → Themes → Login theme**; restore the previous selection to undo the appearance change. This does not migrate credential policy or login state. See [themes](themes.md) for the inherited form behavior and OpenKYC entry-path notes.
