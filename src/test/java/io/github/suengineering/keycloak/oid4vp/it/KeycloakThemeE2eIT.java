@@ -15,6 +15,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
     private String previousTheme;
+    private String previousBrowserFlow;
+
+    private void useWalletFlow() throws Exception {
+        String path = "/admin/realms/" + Oid4vpE2eEnvironment.REALM;
+        previousBrowserFlow = String.valueOf(adminClient().getJson(path).get("browserFlow"));
+        adminClient().putJson(path, Map.of("browserFlow", "wallet-browser"));
+    }
 
     private void useTheme(String theme) throws Exception {
         String path = "/admin/realms/" + Oid4vpE2eEnvironment.REALM;
@@ -24,6 +31,11 @@ class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
 
     @AfterEach
     void restoreTheme() throws Exception {
+        if (previousBrowserFlow != null) {
+            adminClient()
+                    .putJson("/admin/realms/" + Oid4vpE2eEnvironment.REALM, Map.of("browserFlow", previousBrowserFlow));
+            previousBrowserFlow = null;
+        }
         if (previousTheme != null) {
             adminClient().putJson("/admin/realms/" + Oid4vpE2eEnvironment.REALM, Map.of("loginTheme", previousTheme));
             previousTheme = null;
@@ -31,12 +43,13 @@ class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"oid4vp", "su-engineering"})
+    @ValueSource(strings = {"openkyc", "su-engineering"})
     void sameDeviceLoginCompletesWithBundledTheme(String theme) throws Exception {
         useTheme(theme);
+        useWalletFlow();
         callback().reset();
         Oid4vpTestKeycloakSetup.deleteAllOid4vpUsers(adminClient(), Oid4vpE2eEnvironment.REALM);
-        navigateToWallet(theme);
+        navigateDirectlyToWallet();
         var response = flow.submitToWallet(flow.getSameDeviceWalletUrl());
         flow.waitForLoginCompletion(response);
         flow.completeFirstBrokerLoginIfNeeded("theme-same-device-user");
@@ -44,12 +57,13 @@ class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"oid4vp", "su-engineering"})
+    @ValueSource(strings = {"openkyc", "su-engineering"})
     void crossDeviceLoginCompletesWithBundledTheme(String theme) throws Exception {
         useTheme(theme);
+        useWalletFlow();
         callback().reset();
         Oid4vpTestKeycloakSetup.deleteAllOid4vpUsers(adminClient(), Oid4vpE2eEnvironment.REALM);
-        navigateToWallet(theme);
+        navigateDirectlyToWallet();
         assertThat(flow.submitToWallet(flow.getCrossDeviceWalletUrl()).redirectUri())
                 .isNull();
         waitForCrossDeviceNavigation();
@@ -57,15 +71,18 @@ class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
         flow.assertLoginSucceeded();
     }
 
-    private void navigateToWallet(String theme) {
-        if (theme.equals("oid4vp")) {
-            // Existing OpenKYC integrations enter the broker through the OIDC IdP hint.
-            // Its legacy generic login link drops the auth-session query parameters.
-            page.navigate(flow.buildAuthRequestUri() + "&kc_idp_hint=oid4vp");
-        } else {
-            flow.navigateToLoginPage();
-            flow.clickOid4vpIdpButton();
-        }
+    private void navigateDirectlyToWallet() {
+        page.navigate(flow.buildAuthRequestUri().toString());
+        page.waitForSelector("#oid4vp-open-wallet");
+        assertThat(page.locator("#username, #password, #social-oid4vp").count()).isZero();
+    }
+
+    @Test
+    void openkycProviderSelectionPreservesAuthenticationSession() throws Exception {
+        useTheme("openkyc");
+        flow.navigateToLoginPage();
+        flow.clickOid4vpIdpButton();
+        assertThat(flow.getSameDeviceWalletUrl()).isNotBlank();
     }
 
     @Test
@@ -123,18 +140,18 @@ class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
     @Test
     void neutralThemeSupportsSameDeviceOnlyAndRestart() throws Exception {
         useTheme("su-engineering");
+        useWalletFlow();
         idpConfig
                 .set(Oid4vpIdentityProviderConfig.CROSS_DEVICE_ENABLED, "false")
                 .apply();
-        flow.navigateToLoginPage();
-        flow.clickOid4vpIdpButton();
+        navigateDirectlyToWallet();
         flow.getSameDeviceWalletUrl();
         assertThat(page.locator("#oid4vp-qr-code").count()).isZero();
         assertThat(page.locator("#oid4vp-cross-device-sse-config").count()).isZero();
         page.getByText("Start again", new com.microsoft.playwright.Page.GetByTextOptions().setExact(true))
                 .click();
-        page.waitForSelector("#social-oid4vp");
-        assertThat(page.locator("#username").isVisible()).isTrue();
+        page.waitForSelector("#oid4vp-open-wallet");
+        assertThat(page.locator("#username, #password").count()).isZero();
     }
 
     @Test

@@ -101,8 +101,10 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .name(Oid4vpIdentityProviderConfig.DCQL_QUERY)
                 .label("DCQL Query (JSON)")
                 .helpText(
-                        "Explicit DCQL query JSON. Priority: (1) this if set, (2) auto-generated from mappers, (3) default. "
-                                + "Leave empty to auto-generate from mappers. Missing credential metadata is normalized automatically.")
+                        "Full DCQL JSON for your credential types (SD-JWT VC or mDoc), claim paths, expected "
+                                + "values, claim_sets, and credential_sets. This query takes precedence over mappers; "
+                                + "leave empty to derive the request from mappers. Query structure is validated when saved. "
+                                + "Claim-value conditions guide wallet selection; this provider does not enforce them as login rules.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
                 .add()
                 .property()
@@ -252,6 +254,30 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.ALLOWED_ISSUERS)
+                .label("Allowed Issuers (SD-JWT)")
+                .helpText("Comma-separated SD-JWT issuer (iss) values, including issuer DIDs. "
+                        + "Use explicit issuers to restrict acceptance; blank or '*' allows any issuer. "
+                        + "This is separate from signature verification and does not restrict mDoc issuers.")
+                .type(ProviderConfigProperty.STRING_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.CLOCK_SKEW_SECONDS)
+                .label("Clock Skew (seconds)")
+                .helpText("Clock difference tolerated when validating credential and proof timestamps. "
+                        + "Use a non-negative number of seconds.")
+                .type(ProviderConfigProperty.STRING_TYPE)
+                .defaultValue(String.valueOf(Oid4vpIdentityProviderConfig.DEFAULT_CLOCK_SKEW_SECONDS))
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.KB_JWT_MAX_AGE_SECONDS)
+                .label("Key-Binding Proof Validity Window (seconds)")
+                .helpText("Maximum age of an SD-JWT key-binding proof's issued-at timestamp. "
+                        + "Use a positive number of seconds.")
+                .type(ProviderConfigProperty.STRING_TYPE)
+                .defaultValue(String.valueOf(Oid4vpIdentityProviderConfig.DEFAULT_KB_JWT_MAX_AGE_SECONDS))
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.REQUEST_OBJECT_LIFESPAN_SECONDS)
                 .label("Request Object Lifespan (seconds)")
                 .helpText("How long the signed request object JWT is valid. "
@@ -301,12 +327,15 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
     @Override
     public Oid4vpIdentityProvider create(KeycloakSession session, IdentityProviderModel model) {
         Oid4vpIdentityProviderConfig config = new Oid4vpIdentityProviderConfig(model);
-        validateTransientUserMode(config);
-
-        resolveX509SigningKey(config);
-        validateHaipConfig(config);
-        warnIfTrustListSignatureIsUnchecked(config);
-        warnIfTrustListLoTETypeIsMissing(config);
+        // The Admin Console instantiates disabled providers to list mapper types during setup.
+        // Validate runtime requirements once the provider is enabled, allowing incremental configuration.
+        if (model.isEnabled()) {
+            validateTransientUserMode(config);
+            resolveX509SigningKey(config);
+            validateHaipConfig(config);
+            warnIfTrustListSignatureIsUnchecked(config);
+            warnIfTrustListLoTETypeIsMissing(config);
+        }
 
         return new Oid4vpIdentityProvider(session, config);
     }

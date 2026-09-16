@@ -57,7 +57,7 @@ class ThemeResourcesTest {
 
     @Test
     void oid4vpLoginTemplatesHaveMessagesForEveryReferencedKey() throws Exception {
-        for (String base : new String[] {"/theme-resources/", "/theme/oid4vp/login/"}) {
+        for (String base : new String[] {"/theme-resources/", "/theme/openkyc/login/"}) {
             String template = loadResource(
                     base + (base.equals("/theme-resources/") ? "templates/" : "") + "login-oid4vp-idp.ftl");
             java.util.Properties messages = new java.util.Properties();

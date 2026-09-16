@@ -11,19 +11,7 @@ COPY src ./src
 
 RUN ./mvnw --batch-mode --no-transfer-progress clean package -DskipTests
 
-# Stage 2: Realm Builder - Generate realm JSON with certificates
-FROM alpine:3.21 AS realm-builder
-RUN apk add --no-cache openssl jq
-WORKDIR /realm
-
-# Accept domain argument or default to localhost
-ARG OID4VP_DOMAIN=localhost
-ENV OID4VP_DOMAIN=${OID4VP_DOMAIN}
-
-COPY deployment/scripts/generate-realm.sh /generate-realm.sh
-RUN chmod +x /generate-realm.sh && /generate-realm.sh /realms ${OID4VP_DOMAIN}
-
-# Stage 3: Runtime - Keycloak with extension
+# Stage 2: Runtime - Keycloak with extension
 FROM quay.io/keycloak/keycloak:26.5.4
 
 # Set build-time environment variables (must be set before kc.sh build)
@@ -37,9 +25,9 @@ ENV KC_FEATURES=transient-users
 # Copy providers from builder
 COPY --from=builder /build/target/keycloak-extension-oid4vp.jar /opt/keycloak/providers/keycloak-extension-oid4vp.jar
 
-# Copy realm JSON from builder and custom realm import
-COPY --from=realm-builder /realms/*.json /opt/keycloak/data/import/
-COPY deployment/realm-import.json /opt/keycloak/data/import/realm-openkyc-partners.json
+# Configure verifier material and credential policy in the Admin Console.
+ARG REALM_IMPORT=deployment/realm-import.json
+COPY ${REALM_IMPORT} /opt/keycloak/data/import/realm-import.json
 
 # Build optimized Keycloak image with providers
 RUN /opt/keycloak/bin/kc.sh build

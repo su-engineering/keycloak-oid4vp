@@ -11,12 +11,24 @@ The namespace changes Java class names. Code that imports these classes must upd
 | Installed JAR | `keycloak-extension-oid4vp.jar` |
 | Identity provider | `oid4vp` |
 | Claim mappers | `oid4vp-user-attribute-mapper`, `oid4vp-user-session-mapper` |
-| Login theme | `oid4vp`, with the deployed OpenKYC presentation |
+| OpenKYC login theme | Renamed from `oid4vp` to `openkyc`; update the realm selection |
 | DID configuration | Existing keys and defaults, including opt-in `didResolutionEnabled` |
 | Login state | Existing request handles, nonce binding, shared-store keys and JSON shape |
 | Runtime pins | Root Compose / Maven: 26.5.5; Coolify Dockerfile: 26.5.4 |
 
-The cleanup does not change verification logic, credential acceptance policy, realm import contents, or database settings. License notices are included in the provider JAR.
+The namespace cleanup did not change verification logic or credential acceptance policy. License notices are included in the provider JAR. The subsequent realm and theme changes below require explicit configuration updates.
+
+## OpenKYC theme rename and generic realm
+
+The OpenKYC login theme is now `openkyc`. Before replacing the old JAR, record each realm and client-level login theme override using `oid4vp`. After installing the new build, set those selections to `openkyc` in the Admin Console (realm: **Realm settings → Themes**; client override: **Clients → client → Login settings**). For rollback to an older JAR, restore the theme selection to `oid4vp`. Do not rename the IdP alias/provider ID, mapper IDs, broker URLs, or `kc_idp_hint=oid4vp`.
+
+`deployment/realm-import.json` now creates a generic `wallet` realm using `su-engineering` and direct wallet entry through `wallet-browser`. Its provider starts disabled until configured in the Admin Console. It contains no application clients, issuer allowlists, credential query, or verifier certificates. Setup is documented in [installation](installation.md#configure-a-realm).
+
+The previous OpenKYC import is retained at `deployment/examples/realm-openkyc.json`, with `loginTheme` changed to `openkyc`. For an existing OpenKYC deployment, set `OID4VP_REALM_IMPORT=deployment/examples/realm-openkyc.json` in Coolify to avoid importing an additional `wallet` realm on the next build. Existing database-backed realms are skipped by startup import; update their theme and settings in the Admin Console. Keep their existing credential policy and `oid4vp-browser` binding.
+
+The Dockerfile imports one selected file and no longer generates verifier keys or certificates during the image build. New generic deployments configure that material through **Identity providers → oid4vp**. Existing OpenKYC deployments already used the static import that overwrote the generated file.
+
+Manual DCQL JSON is now structurally validated on provider creation, import, and Admin Console/API updates. Previously accepted malformed queries must be corrected before saving; clearing the field selects mapper-derived requests. The saved query and its conditions are preserved. See [DCQL editing and current response-policy limits](dcql.md).
 
 ## Repository rename
 
@@ -30,7 +42,7 @@ This changes repository naming only. The Maven artifact ID and installed JAR rem
 
 ## Optional neutral theme
 
-The provider also bundles `su-engineering`. Existing realm selections stay unchanged. Select it explicitly under **Realm settings → Themes → Login theme**; restore the previous selection to undo the appearance change. This does not migrate credential policy or login state. See [themes](themes.md) for the inherited form behavior and OpenKYC entry-path notes.
+The provider also bundles `su-engineering`. Select it explicitly under **Realm settings → Themes → Login theme**; select `openkyc` for the OpenKYC appearance. Existing selections are not migrated automatically, so update any `oid4vp` theme selections as described above. Theme selection does not migrate credential policy or login state. See [themes](themes.md) for direct wallet entry and inherited form behavior.
 
 ## Deploying a reviewed build
 

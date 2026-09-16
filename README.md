@@ -10,7 +10,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 
 ![Wallet sign-in with the neutral su.engineering theme: an open-wallet link alongside a QR code](docs/images/su-engineering-wallet-desktop.jpg)
 
-*The optional `su-engineering` theme, captured from a running Keycloak instance with synthetic demo data. The existing OpenKYC theme remains available as `oid4vp`.*
+*The optional `su-engineering` theme, captured from a running Keycloak instance with synthetic demo data. The existing OpenKYC theme remains available as `openkyc`.*
 
 ## What it does
 
@@ -22,7 +22,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | **Wallet interaction** | Same-device links and cross-device QR codes, with server-sent events to resume browser login. |
 | **Presentation requests** | DCQL credential and claim selection; `direct_post` and encrypted `direct_post.jwt` responses. |
 | **Keycloak integration** | Claim-to-user-attribute and claim-to-session-note mappers; optional transient users. |
-| **Login themes** | Neutral `su-engineering` and existing OpenKYC `oid4vp`; select per realm. |
+| **Login themes** | Neutral `su-engineering` and OpenKYC `openkyc`; select per realm. |
 
 ### Project status
 
@@ -40,7 +40,7 @@ cd keycloak-oid4vp
 ./scripts/demo.sh
 ```
 
-Open the **Sign in** URL printed in the terminal and choose **Sign in with Wallet**. The demo selects `su-engineering` and creates disposable Keycloak and wallet containers with generated certificates and synthetic credentials. It does not require your sandbox keys or a real wallet.
+Open the **Sign in** URL printed in the terminal to go directly to the wallet login screen. The demo selects `su-engineering` and creates disposable Keycloak and wallet containers with generated certificates and synthetic credentials. It does not require your sandbox keys or a real wallet.
 
 Follow the [five-minute walkthrough](docs/quickstart.md) to complete a login with the included development wallet. Stop with **Ctrl+C**. This fixture uses `admin/admin` and relaxed test settings; use it only on a trusted development machine.
 

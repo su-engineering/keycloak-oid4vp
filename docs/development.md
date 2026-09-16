@@ -16,7 +16,7 @@ This creates a disposable Keycloak instance with the `su-engineering` theme and 
 | --- | --- |
 | `src/main/java/io/github/suengineering/keycloak/oid4vp/` | Provider, endpoints, verification, request services, and mappers |
 | `src/main/resources/META-INF/` | SPI and bundled-theme registration |
-| `src/main/resources/theme/` | `su-engineering` and existing `oid4vp` login themes |
+| `src/main/resources/theme/` | `su-engineering` and `openkyc` login themes |
 | `src/main/resources/theme-resources/` | Fallback wallet templates and shared completion JavaScript |
 | `src/test/java/` | Unit tests, cryptographic fixtures, E2E infrastructure, and local demo |
 | `src/test/resources/` | Synthetic realm and credential fixtures |

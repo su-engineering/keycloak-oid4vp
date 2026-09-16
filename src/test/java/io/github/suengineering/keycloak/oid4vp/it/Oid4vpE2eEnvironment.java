@@ -340,8 +340,19 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         }
     }
 
-    private static void copyRealmImport(GenericContainer<?> keycloak) {
-        Path realmExport = Path.of("src/test/resources/realm-export.json").toAbsolutePath();
+    private static void copyRealmImport(GenericContainer<?> keycloak) throws IOException {
+        // Exercise the shipped generic realm, then add synthetic test clients and users.
+        var realm = (com.fasterxml.jackson.databind.node.ObjectNode)
+                OBJECT_MAPPER.readTree(Path.of("deployment/realm-import.json").toFile());
+        var fixture = (com.fasterxml.jackson.databind.node.ObjectNode) OBJECT_MAPPER.readTree(
+                Path.of("src/test/resources/realm-export.json").toFile());
+        realm.setAll(fixture);
+        // Most protocol tests exercise provider selection; theme tests and the demo opt into wallet-browser.
+        realm.put("browserFlow", "browser");
+        realm.put("loginTheme", "keycloak");
+        Path realmExport = Files.createTempFile("oid4vp-test-realm-", ".json");
+        realmExport.toFile().deleteOnExit();
+        OBJECT_MAPPER.writeValue(realmExport.toFile(), realm);
         keycloak.withCopyFileToContainer(
                 MountableFile.forHostPath(realmExport), "/opt/keycloak/data/import/realm-export.json");
     }

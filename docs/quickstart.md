@@ -36,7 +36,7 @@ Ports are assigned dynamically. Use the printed URLs. This test fixture includes
 
 ## 3. Open wallet sign-in
 
-Open **Sign in**, then select **Sign in with Wallet**. You should see the su.engineering wordmark, **Open wallet**, and a QR code.
+Open **Sign in**. The realm takes you directly to the wallet screen, with the su.engineering wordmark, **Open wallet**, and a QR code.
 
 ![su.engineering wallet login on desktop](images/su-engineering-wallet-desktop.jpg)
 
@@ -55,7 +55,8 @@ The development wallet submits synthetic credentials without a real user's conse
 Use the **Admin** URL and `admin/admin`, switch to **wallet-demo**, then inspect:
 
 - **Identity providers → oid4vp** for DCQL, trust, and wallet flow settings.
-- **Realm settings → Themes** for `su-engineering` and `oid4vp`.
+- **Realm settings → Themes** for `su-engineering` and `openkyc`.
+- **Authentication → Flows → wallet-browser** for direct wallet entry. The default provider is `oid4vp`.
 - **Identity providers → oid4vp → Mappers** for claim-to-session-note mapping.
 
 The realm has permissive test client settings and generated signing material. It is a learning fixture, not a production realm template. See [installation](installation.md) to configure your own realm.

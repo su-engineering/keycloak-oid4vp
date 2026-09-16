@@ -1,0 +1,22 @@
+{
+  "credentials": [
+    {
+      "id": "membership",
+      "format": "dc+sd-jwt",
+      "meta": {
+        "vct_values": ["https://credentials.example.com/membership"]
+      },
+      "claims": [
+        {"id": "subject", "path": ["sub"]},
+        {"id": "tier", "path": ["membership", "tier"], "values": ["gold", "platinum"]},
+        {"id": "active", "path": ["membership", "active"], "values": [true]},
+        {"id": "member_id", "path": ["member_id"]},
+        {"id": "email", "path": ["contact", "email"]}
+      ],
+      "claim_sets": [
+        ["subject", "tier", "active", "member_id"],
+        ["subject", "tier", "active", "email"]
+      ]
+    }
+  ]
+}

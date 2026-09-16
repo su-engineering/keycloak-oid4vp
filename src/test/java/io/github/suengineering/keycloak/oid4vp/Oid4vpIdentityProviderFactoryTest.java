@@ -73,6 +73,9 @@ class Oid4vpIdentityProviderFactoryTest {
                         Oid4vpIdentityProviderConfig.CLIENT_ID_SCHEME,
                         Oid4vpIdentityProviderConfig.X509_CERTIFICATE_PEM,
                         Oid4vpIdentityProviderConfig.TRUST_LIST_URL,
+                        Oid4vpIdentityProviderConfig.ALLOWED_ISSUERS,
+                        Oid4vpIdentityProviderConfig.CLOCK_SKEW_SECONDS,
+                        Oid4vpIdentityProviderConfig.KB_JWT_MAX_AGE_SECONDS,
                         Oid4vpIdentityProviderConfig.ISSUER_METADATA_MAX_CACHE_TTL_SECONDS,
                         Oid4vpIdentityProviderConfig.REQUEST_OBJECT_LIFESPAN_SECONDS);
     }
@@ -133,6 +136,7 @@ class Oid4vpIdentityProviderFactoryTest {
     void create_allowsPlainNonHaipProviderWithoutCertificateBinding() {
         KeycloakSession session = mockSession();
         IdentityProviderModel model = new IdentityProviderModel();
+        model.setEnabled(true);
         model.setAlias("wallet");
         model.getConfig().put(Oid4vpIdentityProviderConfig.ENFORCE_HAIP, "false");
         model.getConfig().put(Oid4vpIdentityProviderConfig.CLIENT_ID_SCHEME, "plain");
@@ -145,9 +149,26 @@ class Oid4vpIdentityProviderFactoryTest {
     }
 
     @Test
+    void create_disabledProviderAllowsAdminSetupBeforeCertificateIsConfigured() {
+        IdentityProviderModel model = new IdentityProviderModel();
+        model.setAlias("wallet");
+        model.setEnabled(false);
+        model.getConfig().put(Oid4vpIdentityProviderConfig.ENFORCE_HAIP, "true");
+
+        Oid4vpIdentityProviderFactory factory = new Oid4vpIdentityProviderFactory();
+        assertThat(factory.create(mockSession(), model)).isNotNull();
+
+        model.setEnabled(true);
+        assertThatThrownBy(() -> factory.create(mockSession(), model))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("X.509 certificate");
+    }
+
+    @Test
     void create_doNotStoreUsers_requiresKeycloakFeature() {
         KeycloakSession session = mockSession();
         IdentityProviderModel model = new IdentityProviderModel();
+        model.setEnabled(true);
         model.setAlias("wallet");
         model.getConfig().put(IdentityProviderModel.DO_NOT_STORE_USERS, "true");
         model.getConfig().put(Oid4vpIdentityProviderConfig.ENFORCE_HAIP, "false");

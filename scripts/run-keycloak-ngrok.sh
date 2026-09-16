@@ -3,6 +3,9 @@ set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 PROVIDER_JAR="$ROOT_DIR/target/keycloak-extension-oid4vp.jar"
+if [ -f "$ROOT_DIR/src/test/resources/realm-wallet-demo-local.json" ]; then
+  export OID4VP_REALM_IMPORT="${OID4VP_REALM_IMPORT:-./src/test/resources/realm-wallet-demo-local.json}"
+fi
 
 usage() {
   cat <<'EOF'

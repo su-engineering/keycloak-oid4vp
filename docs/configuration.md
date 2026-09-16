@@ -38,11 +38,13 @@ Example realm import fragment:
 
 Before choosing defaults, establish the wallet's verifier-authentication requirements, accepted credential issuers and types, claim mapping, user persistence model, and status/revocation policy. A successful demo configuration is not a complete trust policy.
 
-The snippets in this document are fragments. Do not place private signing keys in tracked realm JSON. Select the login theme through the realm's `loginTheme` property; see [themes](themes.md).
+The snippets in this document are fragments. Do not place private signing keys in tracked realm JSON. Configure credential requests, mappers, wallet flows, issuer policy, proof timing, and verifier material under **Identity providers → oid4vp** in the Admin Console. Advanced internal settings such as SSE timing remain available through realm JSON or the Admin REST API. Use the [generic realm and UI setup guide](installation.md#configure-a-realm) for a new deployment. Select the login theme in **Realm settings → Themes**; direct wallet entry is configured separately under **Authentication → Flows**. See [themes](themes.md).
 
 ## Settings
 
 ### Credential Request
+
+Use **Identity providers → oid4vp → Settings → DCQL Query (JSON)** to edit the complete request, including custom credential types and claim conditions. See [the DCQL editor guide](dcql.md) for a non-age example, save validation, and the distinction between request conditions and enforced login policy.
 
 | Key | Description | Default |
 |-----|-------------|---------|

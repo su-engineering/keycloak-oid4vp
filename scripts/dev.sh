@@ -3,6 +3,8 @@ set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 PROVIDER_JAR="$ROOT_DIR/target/keycloak-extension-oid4vp.jar"
+# This sandbox workflow explicitly uses the generated local realm.
+export OID4VP_REALM_IMPORT="${OID4VP_REALM_IMPORT:-./src/test/resources/realm-wallet-demo-local.json}"
 
 # Sensible defaults – override via flags or env vars
 DEFAULT_SANDBOX_DIR="${SANDBOX_DIR:-${ROOT_DIR}/sandbox}"

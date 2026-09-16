@@ -12,7 +12,16 @@ public final class Oid4vpDemo {
         Oid4vpE2eEnvironment env = Oid4vpE2eEnvironment.startDemo();
         Runtime.getRuntime().addShutdownHook(new Thread(env::close));
         String realmPath = "/admin/realms/" + Oid4vpE2eEnvironment.REALM;
-        env.adminClient().putJson(realmPath, Map.of("loginTheme", "su-engineering", "displayName", "Wallet demo"));
+        env.adminClient()
+                .putJson(
+                        realmPath,
+                        Map.of(
+                                "loginTheme",
+                                "su-engineering",
+                                "displayName",
+                                "Wallet demo",
+                                "browserFlow",
+                                "wallet-browser"));
         String accountUrl = env.keycloakHostUrl() + "/realms/" + Oid4vpE2eEnvironment.REALM + "/account/";
         System.out.println("\nLocal demo ready (synthetic credentials; admin/admin). Keep this terminal open.");
         System.out.println("Sign in: " + accountUrl);

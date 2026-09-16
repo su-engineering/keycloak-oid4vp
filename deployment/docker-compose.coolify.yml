@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: deployment/docker/Dockerfile
+      args:
+        REALM_IMPORT: ${OID4VP_REALM_IMPORT:-deployment/realm-import.json}
     expose:
       - "8080"
     labels:

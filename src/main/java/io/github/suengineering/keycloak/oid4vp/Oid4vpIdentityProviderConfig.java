@@ -21,8 +21,10 @@ import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConfigProvider;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpResponseMode;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
+import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryValidator;
 import java.time.Duration;
 import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.RealmModel;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -34,6 +36,12 @@ import org.keycloak.utils.StringUtil;
  * use by domain services without depending on the full Keycloak model.
  */
 public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implements Oid4vpConfigProvider {
+
+    @Override
+    public void validate(RealmModel realm) {
+        super.validate(realm);
+        DcqlQueryValidator.validate(getDcqlQuery());
+    }
 
     public static final String DCQL_QUERY = "dcqlQuery";
     public static final String USER_MAPPING_CLAIM = "userMappingClaim";

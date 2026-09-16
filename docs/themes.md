@@ -5,7 +5,7 @@ The provider JAR includes two independently selectable login themes. Theme selec
 | Theme ID | Appearance | Intended use |
 | --- | --- | --- |
 | `su-engineering` | Warm off-white, monochrome type, orange actions, generic wallet language | Neutral organization branding and new integrations |
-| `oid4vp` | Existing OpenKYC presentation | Existing OpenKYC integrations |
+| `openkyc` | OpenKYC presentation | Existing OpenKYC integrations |
 
 ## Select a theme
 
@@ -34,7 +34,9 @@ These are actual Keycloak 26.5.5 pages from the disposable local demo, using the
 
 <img src="images/su-engineering-wallet-mobile.jpg" alt="Mobile wallet login: open-wallet action, review instructions, and a visible QR code in one column" width="390">
 
-### Standard Keycloak login
+### Optional standard Keycloak login
+
+This screen is available when a realm uses the standard `browser` flow. The generic import and demo use `wallet-browser` and open the wallet screen directly.
 
 <img src="images/su-engineering-login.jpg" alt="Standard Keycloak sign-in form with neutral styling and the wallet identity provider option" width="390">
 
@@ -77,6 +79,10 @@ Preserve `oid4vpForm`, its hidden fields, `oid4vp-open-wallet`, `oid4vp-qr-code`
 5. Update [capture notes](images/README.md) with the runtime, viewport, and date. Do not replace a QR with an invented one or use a production login session.
 6. Run `./mvnw verify -Dit.test=KeycloakThemeE2eIT` and review the Markdown preview.
 
-## Existing OpenKYC entry path
+## Direct wallet login
 
-The existing `oid4vp` theme is retained byte-for-byte. Its generic `login.ftl` constructs a broker link without the session query parameters. Use the standard OIDC authorization request with `kc_idp_hint=oid4vp` for that theme's direct wallet entry path; fixing the generic OpenKYC link is tracked separately in [enterprise readiness](enterprise-readiness.md). The neutral theme inherits Keycloak's generated provider links and supports the normal sign-in selection page.
+Direct entry is controlled by the realm's browser authentication flow, independently of the theme. The generic import binds `wallet-browser`, with a session cookie check and an Identity Provider Redirector whose default provider is `oid4vp`. Fresh authorization requests open the wallet screen without a username/password form or an extra selection click, using either theme.
+
+Configure this in **Authentication → Flows → wallet-browser → Identity Provider Redirector → Settings**, and bind it as the browser flow. The IdP alias is still `oid4vp`; only the OpenKYC theme was renamed to `openkyc`. Existing OpenKYC realms can keep their `oid4vp-browser` flow. See [Admin Console setup](installation.md#configure-a-realm).
+
+For deployments that want provider selection, bind the standard `browser` flow instead. The `openkyc` selection page uses Keycloak's generated provider links, preserving the authentication session and supporting custom IdP aliases. The `su-engineering` theme inherits Keycloak's standard form. A theme change alone does not change the realm's authentication flow.
