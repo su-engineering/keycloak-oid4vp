@@ -353,6 +353,7 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         Path realmExport = Files.createTempFile("oid4vp-test-realm-", ".json");
         realmExport.toFile().deleteOnExit();
         OBJECT_MAPPER.writeValue(realmExport.toFile(), realm);
+        ensureReadableFile(realmExport);
         keycloak.withCopyFileToContainer(
                 MountableFile.forHostPath(realmExport), "/opt/keycloak/data/import/realm-export.json");
     }

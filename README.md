@@ -6,7 +6,7 @@ Add wallet sign-in to Keycloak with **did:web- and did:webvh-issued SD-JWT crede
 
 Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) · Java 21 · Keycloak 26.5.4 / 26.5.5
 
-[Quick start](docs/quickstart.md) · [Documentation](docs/README.md) · [Configuration](docs/configuration.md) · [Contributing](CONTRIBUTING.md)
+[Releases](https://github.com/su-engineering/keycloak-oid4vp/releases) · [Quick start](docs/quickstart.md) · [Documentation](docs/README.md) · [Configuration](docs/configuration.md) · [Contributing](CONTRIBUTING.md)
 
 ![Wallet sign-in with the neutral su.engineering theme: an open-wallet link alongside a QR code](docs/images/su-engineering-wallet-desktop.jpg)
 
@@ -27,7 +27,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 
 ### Project status
 
-`0.1.0-SNAPSHOT` is a development baseline. The did:web SD-JWT flow is deployed, and CI is configured to test both pinned Keycloak versions. Public releases and enterprise support are being prepared.
+`0.1.0-rc.1` is the first release candidate. [Versioned JARs and checksums](https://github.com/su-engineering/keycloak-oid4vp/releases) are built and tested for both pinned Keycloak versions. The did:web SD-JWT flow is deployed; stable releases and enterprise support are being prepared. See [release and download instructions](docs/releases.md).
 
 **Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** In particular, the legacy did:web resolver's key authorization and standard path/port handling need further work. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
 

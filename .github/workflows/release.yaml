@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag, version and notes
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          test "$RELEASE_REF_TYPE" = tag
+          git merge-base --is-ancestor HEAD origin/main
+          python3 .github/scripts/release_version.py "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: prepare
+    uses: ./.github/workflows/ci.yaml
+
+  publish:
+    needs: [prepare, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: provider-keycloak-*
+          path: artifacts
+      - name: Assemble release assets and checksums
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir dist
+          for keycloak_version in 26.5.4 26.5.5; do
+            cp "artifacts/provider-keycloak-${keycloak_version}/keycloak-extension-oid4vp.jar" \
+              "dist/keycloak-extension-oid4vp-${RELEASE_VERSION}-keycloak-${keycloak_version}.jar"
+          done
+          cd dist
+          sha256sum ./*.jar > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          args=(--verify-tag --title "$RELEASE_TAG" --notes-file "docs/releases/${RELEASE_VERSION}.md")
+          if [[ "$IS_PRERELEASE" == true ]]; then
+            args+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" dist/*.jar dist/SHA256SUMS "${args[@]}"

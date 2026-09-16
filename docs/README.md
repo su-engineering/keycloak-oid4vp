@@ -11,6 +11,7 @@ Start with [the local demo](quickstart.md), then [install the provider](installa
 
 ## Integrate and operate
 
+- [Releases](releases.md) — download verified provider JARs or publish a versioned release.
 - [Installation](installation.md) — artifact, runtime versions, container build, and first setup.
 - [Configuration](configuration.md) — provider settings, DID behavior, DCQL, and mappers.
 - [DCQL JSON editor](dcql.md) — custom credentials, claim conditions, examples, and validation in the Admin Console.

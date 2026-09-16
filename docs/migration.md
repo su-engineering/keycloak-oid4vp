@@ -72,7 +72,7 @@ The current pins are a compatibility baseline, not a long-term support commitmen
 - An explicit decision about stricter DID trust checks and any migration of HAIP/SIOP settings.
 - Staging, database migration rehearsal, and image/database rollback.
 
-No automated Maven Central publishing or GitHub release workflow is enabled in this baseline.
+Versioned tags now publish runtime-specific JARs and checksums through the [GitHub release workflow](releases.md). Maven Central publishing is not enabled.
 
 ## DCQL multi-credential verification
 

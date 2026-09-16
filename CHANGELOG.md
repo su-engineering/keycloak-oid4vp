@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased — 0.1.0-SNAPSHOT
+## Unreleased
+
+## 0.1.0-rc.1 — 2026-09-16
 
 Initial independent development baseline under su-engineering.
 
@@ -29,3 +31,6 @@ No public release has been made from this development baseline.
 - Verify multiple credential types and formats in one DCQL response, including repeated presentations, query-specific claims/values, and required/alternative sets from the saved request.
 - Add identity query selection and query-scoped claim mappers in the Admin Console. Preserve all credential claims through deferred login; check every SD-JWT issuer and reject ambiguous scalar mappings.
 - Require mDoc device proofs during login and reject extra embedded documents instead of silently taking the first. Document multi-credential setup and migration behavior.
+
+- Publish versioned GitHub releases with tested JARs for Keycloak 26.5.4 and 26.5.5, SHA-256 checksums, and release notes.
+- Make the synthetic realm import readable by the non-root Keycloak container user so CI can run wallet/browser integration tests.

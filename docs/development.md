@@ -68,7 +68,7 @@ The E2E container version follows `keycloak.version`; use `clean` when switching
 | Theme E2E | Both bundled wallet themes; neutral form validation, modes, local assets, keyboard entry, and 320/390/1440 px overflow checks | Browser regression coverage, not a full accessibility audit |
 | OIDF suite | Explicitly selected live conformance scenarios | Requires credentials and external connectivity; excluded by default |
 
-A release must still exercise the deployed did:web credential shape with an authorized HTTPS issuer and a real wallet against the candidate image. Automated coverage is not a substitute for that acceptance test.
+Before promoting a stable release, exercise the deployed did:web credential shape with an authorized HTTPS issuer and a real wallet against the candidate image. Prereleases can be distributed for this acceptance testing. Automated coverage is not a substitute for that acceptance test.
 
 ### Docker discovery
 
@@ -142,3 +142,7 @@ Live OIDF conformance requires the explicit `conformance` profile, credentials, 
 Before upgrading the dependency, run the WebVH tests and the full unit suite, inspect the shaded JAR for duplicate facade classes or unexpected runtime dependencies, and exercise signed WebVH resolution using the packaged provider with the pinned Keycloak runtime libraries. [Fixture provenance](../src/test/resources/did-webvh/README.md) records the independent histories used by the tests. This is regression coverage, not WebVH certification.
 
 Run the packaging check without Docker using `./mvnw verify -Dit.test=DidWebVhPackagingIT`. This runs the unit suite and only the artifact-packaging integration test; it does not exercise the wallet/browser E2E suite.
+
+## Versioned releases
+
+See [GitHub releases](releases.md) for versioning, release notes, tag creation, automated validation and download instructions. The release workflow reuses the full CI matrix and publishes only the JARs that passed it.

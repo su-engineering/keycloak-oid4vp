@@ -40,4 +40,4 @@ Do not commit real presentations, private keys, access tokens, generated realms,
 
 Contributions are provided under the repository's Apache-2.0 license. Third-party assets retain their own licenses. This project does not require a shared organizational workflow or third-party DCO application.
 
-The repository currently builds development artifacts. Public release automation and a versioned support policy will be established before the first public release. A push can trigger deployment configured outside repository CI; coordinate deployment branches with the service operator.
+Versioned tags publish tested JARs and checksums through the [release workflow](docs/releases.md). Prereleases are intended for integration testing; stable releases require deployment-specific issuer/wallet acceptance testing. A push can trigger deployment configured outside repository CI; coordinate deployment branches with the service operator.

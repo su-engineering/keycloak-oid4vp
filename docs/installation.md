@@ -12,9 +12,9 @@ Install this extension in a test environment matching your deployment before pro
 | Root Compose runtime | Keycloak 26.5.5 |
 | Existing Coolify runtime | Keycloak 26.5.4 |
 | CI runtime matrix | Keycloak 26.5.4 and 26.5.5 |
-| Development version | `0.1.0-SNAPSHOT` |
+| Release candidate | `0.1.0-rc.1` |
 
-These are tested compatibility targets, not a long-term support promise. Public binary releases are not configured yet; build from a reviewed revision.
+These are tested compatibility targets, not a long-term support promise. Download a runtime-specific JAR and verify its checksum using the [release guide](releases.md), or build from a reviewed revision below.
 
 ## Build the provider
 
