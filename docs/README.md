@@ -14,6 +14,8 @@ Start with [the local demo](quickstart.md), then [install the provider](installa
 - [Installation](installation.md) — artifact, runtime versions, container build, and first setup.
 - [Configuration](configuration.md) — provider settings, DID behavior, DCQL, and mappers.
 - [DCQL JSON editor](dcql.md) — custom credentials, claim conditions, examples, and validation in the Admin Console.
+- [did:webvh issuer verification](did-webvh.md) — history validation, witnesses, supported keys, and Admin Console setup.
+- [Multiple credential types](multiple-credential-types.md) — require credentials together, accept alternatives, configure mappers, or isolate policies in realms.
 - [Operations](operations.md) — troubleshooting, logging, proxy behavior, and release validation.
 - [Migration and rollback](migration.md) — stable contracts and upgrade boundaries.
 - [Coolify deployment](../deployment/README.md) — the existing deployment configuration.

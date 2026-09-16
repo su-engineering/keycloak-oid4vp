@@ -16,23 +16,24 @@
  */
 package io.github.suengineering.keycloak.oid4vp.domain;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-/**
- * The fully verified result of processing a {@code vp_token} from the wallet.
- *
- * <p>Contains all verified credentials (keyed by credential ID from the DCQL query) and a merged
- * claims map that combines claims from all credentials for convenient attribute mapping.
- * Produced by {@link io.github.suengineering.keycloak.oid4vp.verification.VpTokenProcessor}.
- *
- * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#section-7">OID4VP 1.0 §7 — VP Token</a>
- */
-public record VpTokenResult(Map<String, VerifiedCredential> credentials, Map<String, Object> mergedClaims) {
-    public boolean isMultiCredential() {
-        return credentials.size() > 1;
+/** Verified presentations grouped by DCQL query ID, in request order. Claims stay separate. */
+public record VpTokenResult(Map<String, List<VerifiedCredential>> credentials) {
+    public VpTokenResult {
+        Map<String, List<VerifiedCredential>> copy = new LinkedHashMap<>();
+        credentials.forEach((id, values) -> copy.put(id, List.copyOf(values)));
+        credentials = Collections.unmodifiableMap(copy);
+    }
+
+    public List<VerifiedCredential> allCredentials() {
+        return credentials.values().stream().flatMap(List::stream).toList();
     }
 
     public VerifiedCredential getPrimaryCredential() {
-        return credentials.values().stream().findFirst().orElse(null);
+        return allCredentials().stream().findFirst().orElse(null);
     }
 }

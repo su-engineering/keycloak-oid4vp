@@ -30,7 +30,6 @@ import io.github.suengineering.keycloak.oid4vp.util.Oid4vpAuthSessionResolver;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectEncryptor;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectStore;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
@@ -88,8 +87,7 @@ public class Oid4vpRequestObjectService {
             Oid4vpIdentityProviderConfig config = provider.getConfig();
             Oid4vpResponseMode responseMode = config.getResolvedResponseMode();
             PreparedDcqlQuery preparedDcqlQuery = provider.prepareDcqlQueryFromConfig();
-            requestContext = createRequestContext(
-                    requestHandle, flowContext, responseMode, preparedDcqlQuery.configuredCredentialTypes());
+            requestContext = createRequestContext(requestHandle, flowContext, responseMode, preparedDcqlQuery);
             requestObjectStore.storeRequestContext(session, requestContext);
             String kid = Oid4vpRequestObjectStore.extractKidFromJwk(requestContext.encryptionKeyJson());
             if (kid != null) {
@@ -149,7 +147,7 @@ public class Oid4vpRequestObjectService {
             String requestHandle,
             Oid4vpRequestObjectStore.FlowContextEntry flowContext,
             Oid4vpResponseMode responseMode,
-            List<String> configuredCredentialTypes) {
+            PreparedDcqlQuery preparedDcqlQuery) {
         String state = buildRequestState(flowContext.tabId());
         String nonce = UUID.randomUUID().toString();
         String encryptionKeyJson = null;
@@ -170,7 +168,9 @@ public class Oid4vpRequestObjectService {
                 nonce,
                 encryptionKeyJson,
                 encryptionJwkThumbprint,
-                configuredCredentialTypes);
+                preparedDcqlQuery.configuredCredentialTypes(),
+                preparedDcqlQuery.dcqlQuery(),
+                provider.getConfig().getIdentityCredentialId());
     }
 
     private String buildRequestState(String tabId) {

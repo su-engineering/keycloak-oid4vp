@@ -373,6 +373,8 @@ class Oid4vpIdentityProviderEndpointTest {
                 nonce,
                 encryptionKeyJson,
                 "thumbprint",
-                List.of());
+                List.of(),
+                null,
+                null);
     }
 }

@@ -44,6 +44,9 @@ public final class DcqlQueryValidator {
             require(Set.of("dc+sd-jwt", "mso_mdoc").contains(format), path + ".format must be dc+sd-jwt or mso_mdoc.");
             optionalBoolean(credential, "multiple", path);
             optionalBoolean(credential, "require_cryptographic_holder_binding", path);
+            require(
+                    credential.path("require_cryptographic_holder_binding").asBoolean(true),
+                    path + ".require_cryptographic_holder_binding=false is not supported for wallet login.");
             validateMeta(credential, format, path);
             validateClaims(credential, format, path);
             if (credential.has("trusted_authorities")) {

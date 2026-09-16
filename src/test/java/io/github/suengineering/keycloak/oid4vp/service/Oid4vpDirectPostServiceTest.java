@@ -224,23 +224,23 @@ class Oid4vpDirectPostServiceTest {
         idpConfig.setEnabled(true);
         idpConfig.setProviderId("oid4vp");
         BrokeredIdentityContext brokeredIdentityContext = createBrokeredIdentityContext(idpConfig);
+        io.github.suengineering.keycloak.oid4vp.util.Oid4vpMapperUtils.storeCredentials(
+                brokeredIdentityContext,
+                Map.of(
+                        "license",
+                        java.util.List.of(new io.github.suengineering.keycloak.oid4vp.domain.VerifiedCredential(
+                                "license",
+                                "issuer",
+                                "License",
+                                Map.of("details", Map.of("level", "professional")),
+                                io.github.suengineering.keycloak.oid4vp.domain.PresentationType.SD_JWT))));
         IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         @SuppressWarnings("rawtypes")
         IdentityProviderFactory identityProviderFactory = mock(IdentityProviderFactory.class);
         @SuppressWarnings("rawtypes")
         UserAuthenticationIdentityProvider deserializedIdp = mock(UserAuthenticationIdentityProvider.class);
-        IdentityProviderDataMarshaller marshaller = new IdentityProviderDataMarshaller() {
-            @Override
-            public String serialize(Object object) {
-                return object != null ? object.toString() : "";
-            }
-
-            @Override
-            public <T> T deserialize(String value, Class<T> clazz) {
-                return null;
-            }
-        };
+        IdentityProviderDataMarshaller marshaller = new org.keycloak.broker.provider.DefaultDataMarshaller();
 
         when(authenticationSessions.getRootAuthenticationSession(realm, "root-session"))
                 .thenReturn(rootSession);
@@ -302,6 +302,12 @@ class Oid4vpDirectPostServiceTest {
         when(callback.authenticated(any(BrokeredIdentityContext.class))).thenAnswer(invocation -> {
             BrokeredIdentityContext context = invocation.getArgument(0);
             assertThat(context.getAuthenticationSession()).isSameAs(currentAuthSession);
+            org.keycloak.models.IdentityProviderMapperModel mapper =
+                    new org.keycloak.models.IdentityProviderMapperModel();
+            mapper.setConfig(Map.of("credential.query.id", "license"));
+            assertThat(io.github.suengineering.keycloak.oid4vp.util.Oid4vpMapperUtils.getClaimValue(
+                            context, "details/level", mapper))
+                    .isEqualTo("professional");
             return Response.ok("ok").build();
         });
 
@@ -319,17 +325,7 @@ class Oid4vpDirectPostServiceTest {
         BrokeredIdentityContext context = new BrokeredIdentityContext("broker-user", idpConfig);
         UserAuthenticationIdentityProvider<Oid4vpIdentityProviderConfig> idp =
                 mock(UserAuthenticationIdentityProvider.class);
-        IdentityProviderDataMarshaller marshaller = new IdentityProviderDataMarshaller() {
-            @Override
-            public String serialize(Object object) {
-                return object != null ? object.toString() : "";
-            }
-
-            @Override
-            public <T> T deserialize(String value, Class<T> clazz) {
-                return null;
-            }
-        };
+        IdentityProviderDataMarshaller marshaller = new org.keycloak.broker.provider.DefaultDataMarshaller();
         when(idp.getMarshaller()).thenReturn(marshaller);
         context.setIdp(idp);
         return context;

@@ -156,7 +156,7 @@ public class Oid4vpClaimToUserAttributeMapper extends AbstractIdentityProviderMa
             return null;
         }
 
-        Object claimValue = Oid4vpMapperUtils.getClaimValue(context, claimPath);
+        Object claimValue = Oid4vpMapperUtils.getClaimValue(context, claimPath, mapperModel);
         if (claimValue == null) {
             if (!isOptional) {
                 LOG.warnf("Required claim '%s' not found %s", claimPath, missingClaimMessageSuffix);

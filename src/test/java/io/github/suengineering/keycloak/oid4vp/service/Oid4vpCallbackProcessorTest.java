@@ -62,7 +62,9 @@ class Oid4vpCallbackProcessorTest {
                     "test-nonce",
                     null,
                     null,
-                    List.of("IdentityCredential"));
+                    List.of("IdentityCredential"),
+                    null,
+                    null);
 
     private Oid4vpCallbackProcessor processor;
     private Oid4vpIdentityProviderConfig config;
@@ -99,7 +101,7 @@ class Oid4vpCallbackProcessorTest {
                         DEFAULT_REQUEST_CONTEXT.effectiveClientId(),
                         DEFAULT_REQUEST_CONTEXT.nonce(),
                         DEFAULT_REQUEST_CONTEXT.responseUri())))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
 
         BrokeredIdentityContext result = processor.process(DEFAULT_REQUEST_CONTEXT, vpToken, null, null);
 
@@ -137,24 +139,11 @@ class Oid4vpCallbackProcessorTest {
                 Map.of("sub", "user1"),
                 PresentationType.SD_JWT);
         when(vpTokenProcessor.process(request(vpToken, "test-client", "nonce", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
 
         assertThatThrownBy(() -> processor.process(requestContext("state", "nonce"), vpToken, null, null))
                 .isInstanceOf(IdentityBrokerException.class)
                 .hasMessageContaining("Issuer not allowed");
-    }
-
-    @Test
-    void process_credentialTypeNotConfiguredForRequest_throws() throws Exception {
-        String vpToken = "vp-token";
-        VerifiedCredential credential = new VerifiedCredential(
-                "cred-1", "https://issuer.example", "BadType", Map.of("sub", "user1"), PresentationType.SD_JWT);
-        when(vpTokenProcessor.process(request(vpToken, "test-client", "nonce", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
-
-        assertThatThrownBy(() -> processor.process(requestContext("state", "nonce", "GoodType"), vpToken, null, null))
-                .isInstanceOf(IdentityBrokerException.class)
-                .hasMessageContaining("Credential type not trusted by this OID4VP IdP");
     }
 
     @Test
@@ -163,7 +152,7 @@ class Oid4vpCallbackProcessorTest {
         VerifiedCredential credential = new VerifiedCredential(
                 "cred-1", "https://issuer.example", "IdentityCredential", Map.of(), PresentationType.SD_JWT);
         when(vpTokenProcessor.process(request(vpToken, "test-client", "nonce", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
 
         assertThatThrownBy(() -> processor.process(requestContext("state", "nonce"), vpToken, null, null))
                 .isInstanceOf(IdentityBrokerException.class)
@@ -178,7 +167,7 @@ class Oid4vpCallbackProcessorTest {
         VerifiedCredential credential = new VerifiedCredential(
                 "cred-1", "https://issuer.example", "IdentityCredential", Map.of(), PresentationType.SD_JWT);
         when(vpTokenProcessor.process(request(vpToken, "test-client", "nonce", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
 
         BrokeredIdentityContext result = processor.process(requestContext("state", "nonce"), vpToken, null, null);
 
@@ -202,7 +191,7 @@ class Oid4vpCallbackProcessorTest {
                 Map.of("sub", "user1"),
                 PresentationType.SD_JWT);
         when(vpTokenProcessor.process(request(vpToken, "test-client", "nonce", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
 
         BrokeredIdentityContext result = processor.process(requestContext("state", "nonce"), vpToken, null, null);
 
@@ -225,7 +214,7 @@ class Oid4vpCallbackProcessorTest {
                         DEFAULT_REQUEST_CONTEXT.effectiveClientId(),
                         DEFAULT_REQUEST_CONTEXT.nonce(),
                         DEFAULT_REQUEST_CONTEXT.responseUri())))
-                .thenReturn(new VpTokenResult(Map.of("cred-1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
 
         BrokeredIdentityContext result = processor.process(DEFAULT_REQUEST_CONTEXT, vpToken, null, null);
 
@@ -245,7 +234,7 @@ class Oid4vpCallbackProcessorTest {
                 Map.of("sub", "user1"),
                 PresentationType.SD_JWT);
         when(vpTokenProcessor.process(any(VpTokenProcessor.Request.class)))
-                .thenReturn(new VpTokenResult(Map.of("cred1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred1", List.of(credential))));
 
         UserAuthenticationIdentityProvider<?> provider = mock(UserAuthenticationIdentityProvider.class);
         Oid4vpCallbackProcessor idTokenProcessor =
@@ -286,10 +275,10 @@ class Oid4vpCallbackProcessorTest {
                 PresentationType.MDOC);
         when(vpTokenProcessor.process(
                         request("vp-upper", "test-client", "nonce-upper", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("sd-jwt-credential", sdJwtCredential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("sd-jwt-credential", List.of(sdJwtCredential))));
         when(vpTokenProcessor.process(
                         request("vp-lower", "test-client", "nonce-lower", "https://example.com/callback")))
-                .thenReturn(new VpTokenResult(Map.of("mdoc-credential", mdocCredential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("mdoc-credential", List.of(mdocCredential))));
 
         UserAuthenticationIdentityProvider<?> provider = mock(UserAuthenticationIdentityProvider.class);
         Oid4vpCallbackProcessor claimProcessor =
@@ -315,7 +304,7 @@ class Oid4vpCallbackProcessorTest {
                 Map.of("sub", "user1"),
                 PresentationType.SD_JWT);
         when(vpTokenProcessor.process(any(VpTokenProcessor.Request.class)))
-                .thenReturn(new VpTokenResult(Map.of("cred1", credential), Map.of()));
+                .thenReturn(new VpTokenResult(Map.of("cred1", List.of(credential))));
 
         UserAuthenticationIdentityProvider<?> provider = mock(UserAuthenticationIdentityProvider.class);
         Oid4vpCallbackProcessor idTokenProcessor =
@@ -327,6 +316,91 @@ class Oid4vpCallbackProcessorTest {
     }
 
     // ===== Helper Methods =====
+
+    @Test
+    void additionalIssuerIsCheckedBeforeMappingOrLogin() {
+        when(config.isIssuerAllowed("https://untrusted.example")).thenReturn(false);
+        when(vpTokenProcessor.process(any())).thenReturn(multiResult("https://untrusted.example"));
+        assertThatThrownBy(() -> processor.process(DEFAULT_REQUEST_CONTEXT, "vp", null, null))
+                .hasMessageContaining("Issuer not allowed");
+    }
+
+    @Test
+    void explicitIdentityQuerySelectsSubjectWithoutMergingClaims() {
+        when(vpTokenProcessor.process(any())).thenReturn(multiResult("https://issuer.example"));
+        var snapshot = identityContext("license");
+        BrokeredIdentityContext context = processor.process(snapshot, "vp", null, null);
+        assertThat(context.getUsername()).isEqualTo("license-subject");
+        assertThat(Oid4vpMapperUtils.getClaimValue(context, "tier")).isNull();
+        assertThat(Oid4vpMapperUtils.getClaimValue(context, "sub")).isEqualTo("license-subject");
+        // Forward the immutable login query, independent of subsequent IdP configuration changes.
+        verify(vpTokenProcessor)
+                .process(new VpTokenProcessor.Request(
+                        "vp",
+                        snapshot.effectiveClientId(),
+                        snapshot.nonce(),
+                        snapshot.responseUri(),
+                        null,
+                        null,
+                        snapshot.dcqlQuery()));
+        assertThat(context.getContextData()).containsKey(Oid4vpMapperUtils.CONTEXT_CREDENTIALS_KEY);
+    }
+
+    @Test
+    void missingOrAmbiguousIdentityQueryRejectsLogin() {
+        when(vpTokenProcessor.process(any())).thenReturn(multiResult("https://issuer.example"));
+        assertThatThrownBy(() -> processor.process(identityContext("missing"), "vp", null, null))
+                .hasMessageContaining("exactly one presentation");
+        VerifiedCredential a =
+                new VerifiedCredential("member", "issuer", "Member", Map.of("sub", "a"), PresentationType.SD_JWT);
+        VerifiedCredential b =
+                new VerifiedCredential("member", "issuer", "Member", Map.of("sub", "b"), PresentationType.SD_JWT);
+        when(vpTokenProcessor.process(any())).thenReturn(new VpTokenResult(Map.of("member", List.of(a, b))));
+        assertThatThrownBy(() -> processor.process(identityContext(null), "vp", null, null))
+                .hasMessageContaining("Ambiguous login identity");
+        when(config.isTransientUsersEnabled()).thenReturn(true);
+        assertThat(processor.process(identityContext(null), "vp", null, null).getUsername())
+                .startsWith("transient-");
+    }
+
+    private VpTokenResult multiResult(String licenseIssuer) {
+        Map<String, List<VerifiedCredential>> credentials = new java.util.LinkedHashMap<>();
+        credentials.put(
+                "member",
+                List.of(new VerifiedCredential(
+                        "member",
+                        "https://issuer.example",
+                        "Membership",
+                        Map.of("sub", "member-subject", "tier", "gold"),
+                        PresentationType.SD_JWT)));
+        credentials.put(
+                "license",
+                List.of(new VerifiedCredential(
+                        "license",
+                        licenseIssuer,
+                        "License",
+                        Map.of("sub", "license-subject"),
+                        PresentationType.SD_JWT)));
+        return new VpTokenResult(credentials);
+    }
+
+    private Oid4vpRequestObjectStore.RequestContextEntry identityContext(String id) {
+        var original = DEFAULT_REQUEST_CONTEXT;
+        return new Oid4vpRequestObjectStore.RequestContextEntry(
+                original.requestHandle(),
+                original.rootSessionId(),
+                original.tabId(),
+                original.state(),
+                original.effectiveClientId(),
+                original.responseUri(),
+                original.flow(),
+                original.nonce(),
+                null,
+                null,
+                List.of(),
+                "{\"credentials\":[{\"id\":\"member\",\"format\":\"dc+sd-jwt\",\"meta\":{}}]}",
+                id);
+    }
 
     private String buildSelfIssuedIdToken(ECKey walletKey, String audience, String nonce) throws Exception {
         String thumbprint = walletKey.computeThumbprint("SHA-256").toString();
@@ -362,11 +436,13 @@ class Oid4vpCallbackProcessorTest {
                 nonce,
                 null,
                 null,
-                List.of(configuredCredentialTypes));
+                List.of(configuredCredentialTypes),
+                null,
+                null);
     }
 
     private static VpTokenProcessor.Request request(
             String vpToken, String clientId, String expectedNonce, String alternateResponseUri) {
-        return new VpTokenProcessor.Request(vpToken, clientId, expectedNonce, alternateResponseUri, null, null);
+        return new VpTokenProcessor.Request(vpToken, clientId, expectedNonce, alternateResponseUri, null, null, null);
     }
 }

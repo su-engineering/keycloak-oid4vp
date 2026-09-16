@@ -93,6 +93,18 @@ public class MdocVerifier {
             if (docType == null) docType = mso != null ? str(mso, "docType") : null;
             if (docType == null) docType = "mso_mdoc";
 
+            if (mso != null && !docType.equals(str(mso, "docType"))) {
+                throw new IllegalStateException("Document docType does not match signed MSO");
+            }
+            if ((clientId != null || nonce != null || responseUri != null)
+                    && (clientId == null
+                            || nonce == null
+                            || responseUri == null
+                            || mso == null
+                            || val(document, "deviceSigned") == null)) {
+                throw new IllegalStateException(
+                        "mDoc presentation requires device authentication and complete session context");
+            }
             Map<String, Object> claims = extractClaims(document, mso);
             verifyIssuerSignature(document, trustedCertificates);
 
@@ -119,6 +131,9 @@ public class MdocVerifier {
         if (docs instanceof CBORItemList docsList) {
             if (docsList.getItems() == null || docsList.getItems().isEmpty()) {
                 throw new IllegalStateException("Empty documents array");
+            }
+            if (docsList.getItems().size() != 1) {
+                throw new IllegalStateException("Each mDoc presentation must contain exactly one document");
             }
             if (docsList.getItems().get(0) instanceof CBORPairList doc) return doc;
             throw new IllegalStateException("Invalid document entry");

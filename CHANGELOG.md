@@ -20,4 +20,12 @@ Initial independent development baseline under su-engineering.
 - Preserve authentication-session parameters in the OpenKYC provider-selection links.
 - Validate full DCQL JSON when saving provider configuration in the Admin Console, with custom credential examples and guidance on query conditions and response-policy limits.
 
+- Add opt-in did:webvh v1.0 SD-JWT issuer resolution with signed history, pre-rotation and witness validation, current assertion-key selection, bounded HTTPS reads and caching.
+- Enforce the configured DID method list and reject DID resolution failures without certificate/metadata fallback.
+- Document multiple credential types using DCQL alternatives, multiple providers, or separate realms with independent SSO.
+
 No public release has been made from this development baseline.
+
+- Verify multiple credential types and formats in one DCQL response, including repeated presentations, query-specific claims/values, and required/alternative sets from the saved request.
+- Add identity query selection and query-scoped claim mappers in the Admin Console. Preserve all credential claims through deferred login; check every SD-JWT issuer and reject ambiguous scalar mappings.
+- Require mDoc device proofs during login and reject extra embedded documents instead of silently taking the first. Document multi-credential setup and migration behavior.

@@ -143,12 +143,13 @@ class Oid4vpIdentityProviderTest {
     }
 
     @Test
-    void buildDcqlQueryFromConfig_manualMdocBackfillsDoctype() throws Exception {
+    void buildDcqlQueryFromConfig_manualMdocPreservesExplicitDoctype() throws Exception {
         config.setDcqlQuery("""
                 {
                   "credentials": [
                     {
-                      "id": "org.iso.18013.5.1.mDL",
+                      "id": "license",
+                      "meta": {"doctype_value":"org.iso.18013.5.1.mDL"},
                       "format": "mso_mdoc",
                       "claims": [
                         { "path": ["org.iso.18013.5.1", "given_name"] }

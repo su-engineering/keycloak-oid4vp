@@ -53,6 +53,8 @@ Save the example as `Dockerfile` in the checkout root before running the command
 
 ## Configure a realm
 
+One Keycloak server can serve multiple credential policies. A separate realm is optional: use it for isolated users and SSO, or configure multiple OID4VP providers within a shared realm. See [multiple credential types and realms](multiple-credential-types.md).
+
 Use [deployment/realm-import.json](../deployment/realm-import.json) for a new realm. Root Compose and the Coolify Dockerfile import it by default; you can also choose **Create realm → Browse** in the Admin Console and upload that JSON. It creates `wallet`, selects `su-engineering`, generates an ES256 realm key, and binds the `wallet-browser` authentication flow.
 
 The OID4VP provider is initially **disabled**. Configure it before enabling login. The import contains no application clients, users, verifier certificates, issuer policy, or credential query. The separate [local demo](quickstart.md) supplies synthetic credentials for a working example.

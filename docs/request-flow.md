@@ -131,7 +131,7 @@ This:
 - Calls `VpTokenProcessor.process(vpToken, clientId, nonce, responseUri, mdocGeneratedNonce, encryptionJwkThumbprint)`:
   - SD-JWT: `SdJwtVerifier.verify()` — delegates to Keycloak's `SdJwtVP.verify()` which performs:
     1. **Issuer signature verification** — validates the SD-JWT's JWS signature using the issuer's public key, resolved in this order:
-       - when DID resolution is enabled and the issuer is supported: did:web public keys (`DidWebResolver`), before strict X.509 handling; resolution failure falls through
+       - when DID resolution is enabled and the issuer is a DID: method allowlist dispatch to `DidWebResolver` or `DidWebVhResolver`; failures reject without certificate/metadata fallback
        - `x5c` certificate-chain validation against the trust list (`X5cChainValidator`)
        - outside HAIP only: JWT VC issuer metadata lookup via `iss` + JOSE `kid` (`JwtVcIssuerMetadataResolver`), including `jwks_uri`
        - final direct trusted-certificate fallback for non-HAIP deployments that use self-signed or directly trusted issuer keys
@@ -145,8 +145,9 @@ This:
     - **ISO 18013-7** (Annex B.4.4): `[null, null, [SHA-256(CBOR([client_id, mdoc_generated_nonce])), SHA-256(CBOR([response_uri, mdoc_generated_nonce])), nonce]]` — used as a fallback when `mdocGeneratedNonce` is present (extracted from JWE `apu` header) and the OID4VP 1.0 transcript does not verify
   - Checks revocation via `StatusListVerifier`
   - Validates the fetched trust list's `LoTEType` against the IdP's configured trust domain
-- Applies the issuer allow-list to the primary credential and validates credential types; policy enforcement for every credential in multi-credential responses needs further review
-- Rejects credentials whose `vct` / `docType` was not explicitly requested by this IdP's DCQL query
+- Verifies every returned presentation and checks it against its own ID in the DCQL snapshot saved with the request (format, type metadata, claim paths, exact values and required sets)
+- Applies the issuer allow-list to every SD-JWT credential, and retains credentials separately for mapping
+- Chooses the identity using `identityCredentialId`, or the first returned query in request order; rejects ambiguous credential-based identities
 - Maps claims to `BrokeredIdentityContext`
 
 9. **Stores deferred auth and returns redirect** — calls:
@@ -247,12 +248,12 @@ Errors can occur at multiple points:
 - `trustedAuthoritiesMode` is explicit verifier policy. `none` is the default, `etsi_tl` adds the trust-list URL to DCQL, and `aki` adds extension-derived certificate key identifiers from the trust list.
 - If `trustListLoTEType` is configured, the fetched trust list must match this `LoTEType`, which keeps one OID4VP IdP instance bound to one trust domain. If it is empty, all LoTE types are accepted and a warning is logged.
 - Within an accepted trust list, issuer verification uses certificates from `.../SvcType/.../Issuance` services only, while status-list verification uses `.../SvcType/.../Revocation` services only.
-- The verifier trusts only the credential types it explicitly requested for that IdP.
+- Each returned credential must match the format and type constraints on its own DCQL query ID.
 - If `trustListSigningCertPem` is not configured, the trust-list JWT signature is not verified and the fetched trust list is trusted as-is. The code warns about that configuration but does not fail startup.
 - When HAIP is enabled with `x509_hash`, the configured verifier certificate PEM is used for client ID derivation and request-object signing metadata. A full CA-issued chain is validated when present; a single non-self-signed leaf is also accepted, in which case issuer trust is expected to come from configured trust lists.
 
-## did:web extension behavior
+## DID issuer resolution
 
-When `didResolutionEnabled` is enabled and the SD-JWT issuer is a supported DID, `SdJwtVerifier` attempts DID resolution before the X.509 and issuer-metadata paths described above. Successful resolution supplies signature verification keys; it does not skip SD-JWT signature, lifetime, disclosure, or holder-binding checks. The callback still applies the configured issuer policy to the primary credential.
+When `didResolutionEnabled` is enabled and the SD-JWT issuer is a DID, `SdJwtVerifier` requires resolution through an explicitly allowed `did:web` or `did:webvh` method. Successful resolution supplies signature verification keys; it does not skip SD-JWT signature, lifetime, disclosure, or holder-binding checks. The callback applies the configured issuer policy to every SD-JWT credential.
 
-Resolution failure falls back to the existing certificate/metadata paths. The compatibility baseline preserves this behavior. See [DID configuration and limitations](configuration.md#didweb-issuer-verification) before changing the trust policy.
+Resolution failure, a disallowed/unsupported method, or an empty key set rejects verification without certificate/metadata fallback. `did:webvh` also rejects when DID resolution is disabled. Its resolver validates the history and witnesses, then selects current authorized assertion keys by `kid`. See [WebVH validation](did-webvh.md) and [did:web compatibility limitations](configuration.md#didweb-issuer-verification).

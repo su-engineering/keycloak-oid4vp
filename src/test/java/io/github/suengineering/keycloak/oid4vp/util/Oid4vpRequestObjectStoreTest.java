@@ -80,7 +80,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-1",
                 KEY_JSON_1,
                 "thumbprint-1",
-                List.of());
+                List.of(),
+                "{\"credentials\":[{\"id\":\"member\",\"format\":\"dc+sd-jwt\",\"meta\":{}}]}",
+                "member");
 
         store.storeFlowHandle(session, "handle-1", flowContext);
         store.storeRequestContext(session, requestContext);
@@ -106,7 +108,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-1",
                 KEY_JSON_1,
                 "thumbprint-1",
-                List.of());
+                List.of(),
+                null,
+                null);
         Oid4vpRequestObjectStore.RequestContextEntry secondRequest = new Oid4vpRequestObjectStore.RequestContextEntry(
                 "handle-1",
                 "root-session",
@@ -118,7 +122,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-2",
                 KEY_JSON_2,
                 "thumbprint-2",
-                List.of());
+                List.of(),
+                null,
+                null);
 
         store.storeFlowHandle(session, "handle-1", flowContext);
         store.storeRequestContext(session, firstRequest);
@@ -157,7 +163,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-1",
                 KEY_JSON_1,
                 "thumbprint-1",
-                List.of());
+                List.of(),
+                null,
+                null);
         Oid4vpRequestObjectStore.RequestContextEntry secondRequest = new Oid4vpRequestObjectStore.RequestContextEntry(
                 "handle-1",
                 "root-session",
@@ -169,7 +177,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-2",
                 KEY_JSON_2,
                 "thumbprint-2",
-                List.of());
+                List.of(),
+                null,
+                null);
 
         store.storeFlowHandle(session, "handle-1", flowContext);
         store.storeRequestContext(session, firstRequest);
@@ -200,7 +210,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-1",
                 KEY_JSON_1,
                 "thumbprint-1",
-                List.of());
+                List.of(),
+                null,
+                null);
 
         store.storeRequestContext(session, requestContext);
         store.storeKidIndex(session, "kid-1", requestContext);
@@ -233,7 +245,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-1",
                 KEY_JSON_1,
                 "thumbprint-1",
-                List.of());
+                List.of(),
+                null,
+                null);
 
         store.storeFlowHandle(session, "handle-1", flowContext);
         store.storeRequestContext(session, requestContext);
@@ -258,7 +272,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-1",
                 KEY_JSON_1,
                 "thumbprint-1",
-                List.of());
+                List.of(),
+                null,
+                null);
         Oid4vpRequestObjectStore.RequestContextEntry secondRequest = new Oid4vpRequestObjectStore.RequestContextEntry(
                 "handle-1",
                 "root-session",
@@ -270,7 +286,9 @@ class Oid4vpRequestObjectStoreTest {
                 "nonce-2",
                 KEY_JSON_2,
                 "thumbprint-2",
-                List.of());
+                List.of(),
+                null,
+                null);
 
         store.storeFlowHandle(session, "handle-1", flowContext);
         store.storeRequestContext(session, firstRequest);

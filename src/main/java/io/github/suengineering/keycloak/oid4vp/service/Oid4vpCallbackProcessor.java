@@ -26,10 +26,8 @@ import io.github.suengineering.keycloak.oid4vp.util.Oid4vpMapperUtils;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectStore;
 import io.github.suengineering.keycloak.oid4vp.verification.SelfIssuedIdTokenValidator;
 import io.github.suengineering.keycloak.oid4vp.verification.VpTokenProcessor;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
@@ -92,9 +90,23 @@ public class Oid4vpCallbackProcessor {
                 requestContext.nonce(),
                 requestContext.responseUri(),
                 mdocGeneratedNonce,
-                requestContext.encryptionJwkThumbprint()));
+                requestContext.encryptionJwkThumbprint(),
+                requestContext.dcqlQuery()));
 
         VerifiedCredential primary = vpResult.getPrimaryCredential();
+        if (StringUtil.isNotBlank(requestContext.identityCredentialId())) {
+            List<VerifiedCredential> identities = vpResult.credentials().get(requestContext.identityCredentialId());
+            if (identities == null || identities.size() != 1) {
+                throw new IdentityBrokerException("Identity Credential Query ID must return exactly one presentation");
+            }
+            primary = identities.get(0);
+        }
+        if (primary != null
+                && !configProvider.isTransientUsersEnabled()
+                && !configProvider.isUseIdTokenSubject()
+                && vpResult.credentials().get(primary.credentialId()).size() != 1) {
+            throw new IdentityBrokerException("Ambiguous login identity: select a query returning one credential");
+        }
         if (primary == null) {
             throw new IdentityBrokerException("No valid credential found in VP token");
         }
@@ -111,13 +123,13 @@ public class Oid4vpCallbackProcessor {
         // This allow-list only applies to formats that expose a canonical issuer string.
         // In practice that means SD-JWT, because mDoc does not define a standard issuer identifier
         // equivalent to SD-JWT `iss`.
-        if (issuer != null && !configProvider.isIssuerAllowed(issuer)) {
-            throw new IdentityBrokerException("Issuer not allowed: " + issuer);
+        for (VerifiedCredential credential : vpResult.allCredentials()) {
+            if (credential.issuer() != null && !configProvider.isIssuerAllowed(credential.issuer())) {
+                throw new IdentityBrokerException("Issuer not allowed: " + credential.issuer());
+            }
         }
-        enforceConfiguredCredentialTypes(requestContext, vpResult);
 
-        Map<String, Object> claims = Oid4vpMapperUtils.toMutableClaims(
-                vpResult.isMultiCredential() ? vpResult.mergedClaims() : primary.claims());
+        Map<String, Object> claims = Oid4vpMapperUtils.toMutableClaims(primary.claims());
 
         String subject;
         String identityKey;
@@ -137,6 +149,7 @@ public class Oid4vpCallbackProcessor {
         context.setIdp(provider);
         context.setUsername(subject);
         context.getContextData().put(Oid4vpMapperUtils.CONTEXT_CLAIMS_KEY, claims);
+        Oid4vpMapperUtils.storeCredentials(context, vpResult.credentials());
         if (issuer != null) {
             context.getContextData().put(Oid4vpMapperUtils.CONTEXT_ISSUER_KEY, issuer);
         }
@@ -183,22 +196,5 @@ public class Oid4vpCallbackProcessor {
                 "OID4VP IdP '%s': generating transient subject for request handle '%s'",
                 idpModel.getAlias(), requestHandle);
         return "transient-" + requestHandle + "-" + UUID.randomUUID();
-    }
-
-    private void enforceConfiguredCredentialTypes(
-            Oid4vpRequestObjectStore.RequestContextEntry requestContext, VpTokenResult vpResult) {
-        Set<String> configuredCredentialTypes = new LinkedHashSet<>(
-                requestContext != null && requestContext.configuredCredentialTypes() != null
-                        ? requestContext.configuredCredentialTypes()
-                        : List.of());
-        if (configuredCredentialTypes.isEmpty()) {
-            return;
-        }
-        for (VerifiedCredential credential : vpResult.credentials().values()) {
-            String credentialType = credential.credentialType();
-            if (credentialType == null || !configuredCredentialTypes.contains(credentialType)) {
-                throw new IdentityBrokerException("Credential type not trusted by this OID4VP IdP: " + credentialType);
-            }
-        }
     }
 }

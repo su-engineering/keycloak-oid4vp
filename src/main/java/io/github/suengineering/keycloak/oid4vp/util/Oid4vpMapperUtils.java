@@ -16,9 +16,11 @@
  */
 package io.github.suengineering.keycloak.oid4vp.util;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.PresentationType;
+import io.github.suengineering.keycloak.oid4vp.domain.VerifiedCredential;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
+import org.keycloak.broker.provider.IdentityBrokerException;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.utils.StringUtil;
 
@@ -43,6 +46,7 @@ public final class Oid4vpMapperUtils {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PATH_SEPARATOR = "/";
 
+    public static final String CONTEXT_CREDENTIALS_KEY = "oid4vp_credentials_json";
     public static final String CONTEXT_CLAIMS_KEY = "oid4vp_claims";
     public static final String CONTEXT_ISSUER_KEY = "oid4vp_issuer";
     public static final String CONTEXT_SUBJECT_KEY = "oid4vp_subject";
@@ -64,27 +68,73 @@ public final class Oid4vpMapperUtils {
         return getNestedValue(claims, claimPath);
     }
 
-    /** Checks if a mapper's credential format/type filter matches the current presentation. */
+    /** Store as JSON text so Keycloak's deferred broker serialization preserves nested claims. */
+    public static void storeCredentials(
+            BrokeredIdentityContext context, Map<String, List<VerifiedCredential>> credentials) {
+        try {
+            context.getContextData().put(CONTEXT_CREDENTIALS_KEY, OBJECT_MAPPER.writeValueAsString(credentials));
+        } catch (Exception e) {
+            throw new IdentityBrokerException("Failed to serialize verified credentials", e);
+        }
+    }
+
+    private static List<VerifiedCredential> selectCredentials(
+            IdentityProviderMapperModel mapper, BrokeredIdentityContext context) {
+        String id = mapper.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_QUERY_ID);
+        String format = mapper.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_FORMAT);
+        String type = mapper.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_TYPE);
+        // Existing unfiltered mappers always read the identity credential, never merge unrelated claims.
+        if (StringUtil.isBlank(id) && StringUtil.isBlank(format) && StringUtil.isBlank(type)) return null;
+        Object json = context.getContextData().get(CONTEXT_CREDENTIALS_KEY);
+        if (json == null) return null; // Compatibility with existing single-credential broker contexts.
+        try {
+            Map<String, List<VerifiedCredential>> credentials =
+                    OBJECT_MAPPER.readValue(json.toString(), new TypeReference<>() {});
+            return credentials.entrySet().stream()
+                    .filter(entry -> StringUtil.isBlank(id) || id.equals(entry.getKey()))
+                    .flatMap(entry -> entry.getValue().stream())
+                    .filter(credential -> StringUtil.isBlank(format)
+                            || format.equals(formatFromPresentationType(
+                                    credential.presentationType().name())))
+                    .filter(credential -> StringUtil.isBlank(type) || type.equals(credential.credentialType()))
+                    .toList();
+        } catch (Exception e) {
+            throw new IdentityBrokerException("Failed to read verified credentials", e);
+        }
+    }
+
+    public static Object getClaimValue(
+            BrokeredIdentityContext context, String claimPath, IdentityProviderMapperModel mapper) {
+        List<VerifiedCredential> selected = selectCredentials(mapper, context);
+        if (selected == null) return getClaimValue(context, claimPath);
+        if (selected.isEmpty()) return null;
+        if (selected.size() == 1) return getNestedValue(selected.get(0).claims(), claimPath);
+        if (!Boolean.parseBoolean(mapper.getConfig().get(Oid4vpMapperConfigProperties.MULTIVALUED))) {
+            throw new IdentityBrokerException(
+                    "Mapper matches multiple credentials; select a Credential Query ID or enable Multi-Valued");
+        }
+        List<Object> values = new ArrayList<>();
+        for (VerifiedCredential credential : selected) {
+            Object value = getNestedValue(credential.claims(), claimPath);
+            if (value instanceof List<?> list) values.addAll(list);
+            else if (value != null) values.add(value);
+        }
+        return values;
+    }
+
+    /** Checks query ID, format and type against all verified credentials. */
     public static boolean matchesCredential(IdentityProviderMapperModel mapperModel, BrokeredIdentityContext context) {
-        String mapperFormat = mapperModel.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_FORMAT);
-        String mapperType = mapperModel.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_TYPE);
-
-        if (StringUtil.isNotBlank(mapperFormat)) {
-            String presentationType = (String) context.getContextData().get(CONTEXT_PRESENTATION_TYPE_KEY);
-            String contextFormat = formatFromPresentationType(presentationType);
-            if (!mapperFormat.equals(contextFormat)) {
-                return false;
-            }
-        }
-
-        if (StringUtil.isNotBlank(mapperType)) {
-            String contextType = (String) context.getContextData().get(CONTEXT_CREDENTIAL_TYPE_KEY);
-            if (!mapperType.equals(contextType)) {
-                return false;
-            }
-        }
-
-        return true;
+        List<VerifiedCredential> selected = selectCredentials(mapperModel, context);
+        if (selected != null) return !selected.isEmpty();
+        if (StringUtil.isNotBlank(mapperModel.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_QUERY_ID)))
+            return false;
+        String format = mapperModel.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_FORMAT);
+        String type = mapperModel.getConfig().get(Oid4vpMapperConfigProperties.CREDENTIAL_TYPE);
+        return (StringUtil.isBlank(format)
+                        || format.equals(formatFromPresentationType(
+                                (String) context.getContextData().get(CONTEXT_PRESENTATION_TYPE_KEY))))
+                && (StringUtil.isBlank(type)
+                        || type.equals(context.getContextData().get(CONTEXT_CREDENTIAL_TYPE_KEY)));
     }
 
     private static String formatFromPresentationType(String presentationType) {

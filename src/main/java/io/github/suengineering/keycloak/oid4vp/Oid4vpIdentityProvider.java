@@ -27,10 +27,11 @@ import io.github.suengineering.keycloak.oid4vp.domain.PreparedDcqlQuery;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpCallbackProcessor;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpRedirectFlowService;
 import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryBuilder;
+import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryValidator;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpQrCodeService;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectStore;
+import io.github.suengineering.keycloak.oid4vp.verification.ConfiguredDidResolver;
 import io.github.suengineering.keycloak.oid4vp.verification.DidResolver;
-import io.github.suengineering.keycloak.oid4vp.verification.DidWebResolver;
 import io.github.suengineering.keycloak.oid4vp.verification.TrustListProvider;
 import io.github.suengineering.keycloak.oid4vp.verification.VpTokenProcessor;
 import jakarta.ws.rs.core.Response;
@@ -90,7 +91,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
 
         DidResolver didResolver = null;
         if (config.isDidResolutionEnabled()) {
-            didResolver = new DidWebResolver(session, config.getDidCacheTtlSeconds());
+            didResolver =
+                    new ConfiguredDidResolver(session, config.getAllowedDidMethods(), config.getDidCacheTtlSeconds());
         }
 
         this.callbackProcessor = new Oid4vpCallbackProcessor(
@@ -164,6 +166,7 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
     public PreparedDcqlQuery prepareDcqlQueryFromConfig() {
         String manual = getConfig().getDcqlQuery();
         if (StringUtil.isNotBlank(manual)) {
+            DcqlQueryValidator.validate(manual);
             String normalized = DcqlQueryBuilder.normalizeManualQuery(
                     OBJECT_MAPPER,
                     manual,

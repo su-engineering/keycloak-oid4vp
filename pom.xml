@@ -8,7 +8,7 @@
   <packaging>jar</packaging>
 
   <name>keycloak-oid4vp</name>
-  <description>Keycloak OID4VP wallet login with did:web and X.509 credential verification</description>
+  <description>Keycloak OID4VP wallet login with did:web, did:webvh and X.509 credential verification</description>
 
   <url>https://github.com/su-engineering/keycloak-oid4vp</url>
 
@@ -61,6 +61,40 @@
   </dependencyManagement>
 
   <dependencies>
+
+    <!-- Validate did:webvh history locally; use Keycloak's HTTP and crypto providers. -->
+    <dependency>
+      <groupId>io.github.decentralized-identity</groupId>
+      <artifactId>didwebvh-core</artifactId>
+      <version>0.3.1</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.squareup.okhttp3</groupId>
+          <artifactId>okhttp</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.github.multiformats</groupId>
+          <artifactId>java-multihash</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.github.novacrypto</groupId>
+          <artifactId>Base58</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.bouncycastle</groupId>
+          <artifactId>bcprov-jdk15on</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.bouncycastle</groupId>
+          <artifactId>bcpkix-jdk15on</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <scope>provided</scope>
+    </dependency>
 
     <dependency>
       <groupId>org.projectlombok</groupId>
@@ -372,6 +406,13 @@
             <configuration>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
+                <!-- Our Apache-2.0 Base58Btc adapter replaces the upstream GPL-backed facade. -->
+                <filter>
+                  <artifact>io.github.decentralized-identity:didwebvh-core</artifact>
+                  <excludes>
+                    <exclude>io/github/decentralizedidentity/didwebvh/core/crypto/Base58Btc.class</exclude>
+                  </excludes>
+                </filter>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>

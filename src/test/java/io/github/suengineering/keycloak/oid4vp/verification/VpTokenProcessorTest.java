@@ -97,109 +97,212 @@ class VpTokenProcessorTest {
         assertThat(primary.presentationType()).isEqualTo(PresentationType.SD_JWT);
         assertThat(primary.issuer()).isEqualTo("https://issuer.example");
         assertThat(primary.credentialType()).isEqualTo("IdentityCredential");
-        assertThat(result.mergedClaims()).containsEntry("sub", "user1");
+        assertThat(result.getPrimaryCredential().claims()).containsEntry("sub", "user1");
     }
 
     @Test
-    void process_multiCredentialWrapperWithDifferentTypes_throws() throws Exception {
-        String credJwt1 = buildSdJwt(Map.of(
-                "iss",
-                "issuer1",
-                "vct",
-                "Type1",
-                "name",
-                "Alice",
-                "cnf",
-                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
-        String credJwt2 = buildSdJwt(Map.of(
-                "iss",
-                "issuer2",
-                "vct",
-                "Type2",
-                "email",
-                "alice@test.com",
-                "cnf",
-                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
-        String sdJwt1 = buildSdJwtVpWithKbJwt(credJwt1, "client-id", "nonce");
-        String sdJwt2 = buildSdJwtVpWithKbJwt(credJwt2, "client-id", "nonce");
+    void multipleCredentialTypesKeepAllClaimsInRequestOrder() throws Exception {
+        String membership = presentation("Membership", "Alice", "nonce");
+        String license = presentation("License", "Bob", "nonce");
+        String query = query("Membership", "License");
+        // Wallet order must not choose the login identity; duplicate claim names must not be merged.
+        String wrapper = objectMapper.writeValueAsString(
+                new LinkedHashMap<>(Map.of("cred2", List.of(license), "cred1", List.of(membership))));
+        VpTokenResult result = processor.process(dcqlRequest(wrapper, query));
+        assertThat(result.credentials().keySet()).containsExactly("cred1", "cred2");
+        assertThat(result.getPrimaryCredential().claims()).containsEntry("sub", "Alice");
+        assertThat(result.credentials().get("cred2").get(0).claims()).containsEntry("sub", "Bob");
+    }
 
-        Map<String, Object> wrapper = new LinkedHashMap<>();
-        wrapper.put("cred1", sdJwt1);
-        wrapper.put("cred2", sdJwt2);
+    @Test
+    void repeatedQueryKeepsEveryPresentationWhenMultipleIsEnabled() throws Exception {
+        String wrapper = objectMapper.writeValueAsString(Map.of(
+                "cred1",
+                List.of(presentation("Membership", "Alice", "nonce"), presentation("Membership", "Bob", "nonce"))));
+        String query = query("Membership");
+        assertThatThrownBy(() -> processor.process(dcqlRequest(wrapper, query)))
+                .hasMessageContaining("Multiple presentations are not allowed");
+        var result =
+                processor.process(dcqlRequest(wrapper, query.replace("\"format\"", "\"multiple\":true,\"format\"")));
+        assertThat(result.credentials().get("cred1")).hasSize(2);
+    }
 
+    @Test
+    void missingRequiredCredentialAndSwappedQueryIdsAreRejected() throws Exception {
+        String member = presentation("Membership", "Alice", "nonce");
+        String license = presentation("License", "Alice", "nonce");
+        String query = query("Membership", "License");
         assertThatThrownBy(() -> processor.process(
-                        request(objectMapper.writeValueAsString(wrapper), "client-id", "nonce", null)))
+                        dcqlRequest(objectMapper.writeValueAsString(Map.of("cred1", List.of(member))), query)))
+                .hasMessageContaining("Missing required");
+        assertThatThrownBy(() -> processor.process(dcqlRequest(
+                        objectMapper.writeValueAsString(Map.of("cred1", List.of(license), "cred2", List.of(member))),
+                        query)))
+                .hasMessageContaining("type does not match");
+        assertThatThrownBy(() -> processor.process(dcqlRequest(member, query))).hasMessageContaining("require a JSON");
+    }
+
+    @Test
+    void invalidSecondProofRejectsWholeResponse() throws Exception {
+        String member = presentation("Membership", "Alice", "nonce");
+        String wrongNonce = presentation("License", "Alice", "other-login");
+        String wrapper =
+                objectMapper.writeValueAsString(Map.of("cred1", List.of(member), "cred2", List.of(wrongNonce)));
+        assertThatThrownBy(() -> processor.process(dcqlRequest(wrapper, query("Membership", "License"))))
                 .isInstanceOf(IdentityBrokerException.class)
-                .hasMessageContaining("Only one credential type is currently supported");
+                .hasMessageContaining("nonce");
     }
 
     @Test
-    void process_multiCredentialWrapperWithSameType_usesFirstCredential() throws Exception {
-        String credJwt1 = buildSdJwt(Map.of(
-                "iss",
-                "issuer1",
-                "vct",
-                "IdentityCredential",
-                "name",
-                "Alice",
-                "cnf",
-                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
-        String credJwt2 = buildSdJwt(Map.of(
-                "iss",
-                "issuer2",
-                "vct",
-                "IdentityCredential",
-                "email",
-                "alice@test.com",
-                "cnf",
-                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
-        String sdJwt1 = buildSdJwtVpWithKbJwt(credJwt1, "client-id", "nonce");
-        String sdJwt2 = buildSdJwtVpWithKbJwt(credJwt2, "client-id", "nonce");
+    void invalidSecondSignatureAndRevokedSecondCredentialRejectWholeResponse() throws Exception {
+        String member = presentation("Membership", "Alice", "nonce");
+        String license = presentation("License", "Alice", "nonce");
+        String[] parts = license.split("~", -1);
+        SignedJWT jwt = SignedJWT.parse(parts[0]);
+        SignedJWT tampered = new SignedJWT(
+                jwt.getHeader(),
+                new JWTClaimsSet.Builder(jwt.getJWTClaimsSet())
+                        .subject("Mallory")
+                        .build());
+        ECKey wrongKey = new ECKeyGenerator(Curve.P_256).generate();
+        tampered.sign(new ECDSASigner(wrongKey));
+        String invalid = buildSdJwtVpWithKbJwt(tampered.serialize(), "client-id", "nonce");
+        String query = query("Membership", "License");
+        assertThatThrownBy(() -> processor.process(dcqlRequest(
+                        objectMapper.writeValueAsString(Map.of("cred1", List.of(member), "cred2", List.of(invalid))),
+                        query)))
+                .isInstanceOf(IdentityBrokerException.class);
+        StatusListVerifier status = org.mockito.Mockito.mock(StatusListVerifier.class);
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    Map<String, Object> claims = invocation.getArgument(0);
+                    if ("License".equals(claims.get("vct"))) throw new IllegalStateException("Credential revoked");
+                    return null;
+                })
+                .when(status)
+                .checkRevocationStatus(org.mockito.ArgumentMatchers.anyMap());
+        VpTokenProcessor withStatus =
+                new VpTokenProcessor(objectMapper, status, new TrustListProvider(List.of(signingCert)));
+        assertThatThrownBy(() -> withStatus.process(dcqlRequest(
+                        objectMapper.writeValueAsString(Map.of("cred1", List.of(member), "cred2", List.of(license))),
+                        query)))
+                .hasMessageContaining("revoked");
+        org.mockito.Mockito.verify(status, org.mockito.Mockito.times(2))
+                .checkRevocationStatus(org.mockito.ArgumentMatchers.anyMap());
+    }
 
-        Map<String, Object> wrapper = new LinkedHashMap<>();
-        wrapper.put("cred1", sdJwt1);
-        wrapper.put("cred2", sdJwt2);
-
-        VpTokenResult result =
-                processor.process(request(objectMapper.writeValueAsString(wrapper), "client-id", "nonce", null));
-
-        assertThat(result.credentials()).hasSize(1);
-        assertThat(result.getPrimaryCredential().credentialId()).isEqualTo("cred1");
-        assertThat(result.getPrimaryCredential().credentialType()).isEqualTo("IdentityCredential");
-        assertThat(result.mergedClaims()).containsEntry("name", "Alice");
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "{}", "{\"unknown\":[\"invalid\"]}", "{\"cred1\":[]}", "{\"cred1\":[null]}",
+                "{\"cred1\":[42]}", "{\"cred1\":[{}]}", "{\"cred1\":[\"\"]}", "{\"cred1\":\"invalid\"}",
+                "{\"cred1\":[\"invalid\"],\"cred1\":[\"invalid\"]}", "{\"cred1\":[\"invalid\"]} {}"
+            })
+    void malformedOrUnrequestedEntriesAreNeverIgnored(String wrapper) {
+        assertThatThrownBy(() -> processor.process(dcqlRequest(wrapper, query("Membership"))))
+                .isInstanceOf(IdentityBrokerException.class);
     }
 
     @Test
-    void process_wrapperEntryWithSameType_usesFirstCredential() throws Exception {
-        String credJwt1 = buildSdJwt(Map.of(
-                "iss",
-                "issuer1",
+    void missingRequestSnapshotFailsClosed() {
+        assertThatThrownBy(() -> processor.process(dcqlRequest("anything", null)))
+                .hasMessageContaining("Restart the login");
+    }
+
+    @Test
+    void mixedSdJwtAndMdocPresentationsAreVerifiedTogether() throws Exception {
+        MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+        VpTokenProcessor mixed = new VpTokenProcessor(
+                objectMapper, new StatusListVerifier(), new TrustListProvider(List.of(signingCert, helper.issuerCert)));
+        String mdoc = helper.build(
+                MdocSessionTranscriptBuilder.buildOid4vp("client-id", "nonce", "https://callback.example", null));
+        String wrapper = objectMapper.writeValueAsString(
+                Map.of("member", List.of(presentation("Membership", "Alice", "nonce")), "license", List.of(mdoc)));
+        String query = """
+                {"credentials":[
+                  {"id":"member","format":"dc+sd-jwt","meta":{"vct_values":["Membership"]},"claims":[{"path":["sub"]}]},
+                  {"id":"license","format":"mso_mdoc","meta":{"doctype_value":"org.iso.18013.5.1.mDL"},
+                   "claims":[{"path":["org.iso.18013.5.1","given_name"],"values":["John"]}]}]}
+                """;
+        VpTokenResult result = mixed.process(dcqlRequest(wrapper, query));
+        assertThat(result.allCredentials())
+                .extracting(VerifiedCredential::presentationType)
+                .containsExactly(PresentationType.SD_JWT, PresentationType.MDOC);
+        // An issuer-signed credential without a device proof cannot serve as the second presentation.
+        String unbound = objectMapper.writeValueAsString(Map.of(
+                "member", List.of(presentation("Membership", "Alice", "nonce")), "license", List.of(helper.build())));
+        assertThatThrownBy(() -> mixed.process(dcqlRequest(unbound, query)))
+                .hasMessageContaining("device authentication");
+    }
+
+    @Test
+    void validSignedCredentialsCannotBypassClaimConditions() throws Exception {
+        String wrapper = objectMapper.writeValueAsString(Map.of(
+                "cred1",
+                List.of(presentation("Membership", "Alice", "nonce")),
+                "cred2",
+                List.of(presentation("License", "Bob", "nonce"))));
+        String query = query("Membership", "License")
+                .replace("\"path\":[\"sub\"]", "\"path\":[\"sub\"],\"values\":[\"Alice\"]");
+        assertThatThrownBy(() -> processor.process(dcqlRequest(wrapper, query)))
+                .hasMessageContaining("Required claims or values");
+    }
+
+    @Test
+    void duplicateIdsAndMalformedAdditionalEntriesRejectEvenWhenTheFirstCredentialIsValid() throws Exception {
+        String vp = objectMapper.writeValueAsString(List.of(presentation("Membership", "Alice", "nonce")));
+        String query = query("Membership");
+        String duplicate = "{\"cred1\":" + vp + ",\"cred1\":" + vp + "}";
+        assertThatThrownBy(() -> processor.process(dcqlRequest(duplicate, query)))
+                .hasMessageContaining("Duplicate field");
+        for (String suffix : List.of(",\"unknown\":[\"invalid\"]", ",\"unknown\":[]", ",\"unknown\":null")) {
+            assertThatThrownBy(() -> processor.process(dcqlRequest("{\"cred1\":" + vp + suffix + "}", query)))
+                    .isInstanceOf(IdentityBrokerException.class);
+        }
+        assertThatThrownBy(() -> processor.process(dcqlRequest("{\"cred1\":" + vp + "} {}", query)))
+                .hasMessageContaining("Trailing token");
+    }
+
+    @Test
+    void missingIssuerCannotBypassIssuerAllowListForAnAdditionalCredential() throws Exception {
+        String signed = buildSdJwt(Map.of(
                 "vct",
-                "IdentityCredential",
-                "name",
+                "License",
+                "sub",
                 "Alice",
                 "cnf",
                 Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
-        String credJwt2 = buildSdJwt(Map.of(
-                "iss",
-                "issuer2",
-                "vct",
-                "IdentityCredential",
-                "email",
-                "alice@test.com",
-                "cnf",
-                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
-        String sdJwt1 = buildSdJwtVpWithKbJwt(credJwt1, "client-id", "nonce");
-        String sdJwt2 = buildSdJwtVpWithKbJwt(credJwt2, "client-id", "nonce");
+        String unidentifiable = buildSdJwtVpWithKbJwt(signed, "client-id", "nonce");
+        String wrapper = objectMapper.writeValueAsString(Map.of(
+                "cred1", List.of(presentation("Membership", "Alice", "nonce")), "cred2", List.of(unidentifiable)));
+        assertThatThrownBy(() -> processor.process(dcqlRequest(wrapper, query("Membership", "License"))))
+                .isInstanceOf(IdentityBrokerException.class);
+    }
 
-        String wrapper = objectMapper.writeValueAsString(Map.of("cred1", List.of(sdJwt1, sdJwt2)));
+    private String presentation(String type, String subject, String nonce) throws Exception {
+        return buildSdJwtVpWithKbJwt(
+                buildSdJwt(Map.of(
+                        "iss",
+                        "https://issuer.example",
+                        "vct",
+                        type,
+                        "sub",
+                        subject,
+                        "cnf",
+                        Map.of("jwk", holderKey.toPublicJWK().toJSONObject()))),
+                "client-id",
+                nonce);
+    }
 
-        VpTokenResult result = processor.process(request(wrapper, "client-id", "nonce", null));
+    private static String query(String... types) {
+        java.util.List<String> entries = new java.util.ArrayList<>();
+        for (int i = 0; i < types.length; i++)
+            entries.add("{\"id\":\"cred" + (i + 1) + "\",\"format\":\"dc+sd-jwt\",\"meta\":{\"vct_values\":[\""
+                    + types[i] + "\"]},\"claims\":[{\"path\":[\"sub\"]}]}");
+        return "{\"credentials\":[" + String.join(",", entries) + "]}";
+    }
 
-        assertThat(result.credentials()).hasSize(1);
-        assertThat(result.getPrimaryCredential().credentialId()).isEqualTo("cred1");
-        assertThat(result.getPrimaryCredential().credentialType()).isEqualTo("IdentityCredential");
-        assertThat(result.mergedClaims()).containsEntry("name", "Alice");
+    private static VpTokenProcessor.Request dcqlRequest(String token, String query) {
+        return new VpTokenProcessor.Request(token, "client-id", "nonce", "https://callback.example", null, null, query);
     }
 
     @Test
@@ -297,6 +400,13 @@ class VpTokenProcessorTest {
 
     private static VpTokenProcessor.Request request(
             String vpToken, String clientId, String expectedNonce, String alternateResponseUri) {
-        return new VpTokenProcessor.Request(vpToken, clientId, expectedNonce, alternateResponseUri, null, null);
+        return new VpTokenProcessor.Request(
+                vpToken,
+                clientId,
+                expectedNonce,
+                alternateResponseUri,
+                null,
+                null,
+                "{\"credentials\":[{\"id\":\"cred1\",\"format\":\"dc+sd-jwt\",\"meta\":{}}]}");
     }
 }

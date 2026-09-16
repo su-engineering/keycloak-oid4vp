@@ -153,32 +153,20 @@ public class SdJwtVerifier {
                 "Resolving issuer verifiers - didResolver available: %s, trusted certificates: %d",
                 didResolver != null, trustedCertificates != null ? trustedCertificates.size() : 0);
 
-        if (didResolver != null) {
-            String issuer = extractIssuer(sdJwtVP);
-            String keyId = extractKeyId(sdJwtVP);
-            LOG.debugf("Attempting DID resolution for issuer: %s, keyId: %s", issuer, keyId);
-
-            if (issuer != null && issuer.startsWith("did:")) {
-                try {
-                    if (didResolver.supports(issuer)) {
-                        LOG.debugf("DID resolver supports issuer %s, attempting resolution...", issuer);
-                        List<SignatureVerifierContext> didVerifiers = didResolver.resolve(issuer, keyId);
-                        if (!didVerifiers.isEmpty()) {
-                            LOG.debugf(
-                                    "Successfully resolved %d verifiers for issuer %s via DID resolver",
-                                    didVerifiers.size(), issuer);
-                            return didVerifiers;
-                        } else {
-                            LOG.warnf("DID resolver returned empty list for issuer %s", issuer);
-                        }
-                    } else {
-                        LOG.debugf("DID resolver does not support issuer %s", issuer);
-                    }
-                } catch (Exception e) {
-                    LOG.warnf("DID resolution failed for %s: %s", issuer, e.getMessage());
+        String issuer = extractIssuer(sdJwtVP);
+        if (issuer != null && issuer.startsWith("did:") && (didResolver != null || issuer.startsWith("did:webvh:"))) {
+            // A certificate fallback must never bypass a method allowlist or failed history validation.
+            if (didResolver == null || !didResolver.supports(issuer)) {
+                throw new IllegalStateException("Issuer DID method is disabled or unsupported");
+            }
+            try {
+                List<SignatureVerifierContext> verifiers = didResolver.resolve(issuer, extractKeyId(sdJwtVP));
+                if (verifiers.isEmpty()) {
+                    throw new IllegalStateException("Issuer DID has no eligible verification keys");
                 }
-            } else {
-                LOG.debugf("Issuer %s is not a DID, skipping DID resolution", issuer);
+                return verifiers;
+            } catch (Exception e) {
+                throw new IllegalStateException("Issuer DID resolution failed", e);
             }
         }
 

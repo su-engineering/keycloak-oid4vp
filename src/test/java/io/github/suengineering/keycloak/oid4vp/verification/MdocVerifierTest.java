@@ -445,6 +445,27 @@ class MdocVerifierTest {
         }
     }
 
+    @Test
+    void rejectsHiddenAdditionalMdocDocuments() throws Exception {
+        MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+        var root = (CBORPairList) new com.authlete.cbor.CBORDecoder(
+                        java.util.Base64.getUrlDecoder().decode(helper.build()))
+                .next();
+        var pairs = new java.util.ArrayList<CBORPair>();
+        for (var pair : root.getPairs()) {
+            if (pair.getKey().toString().contains("documents")) {
+                var docs = (CBORItemList) pair.getValue();
+                pairs.add(new CBORPair(
+                        pair.getKey(),
+                        new CBORItemList(docs.getItems().get(0), docs.getItems().get(0))));
+            } else pairs.add(pair);
+        }
+        String token =
+                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new CBORPairList(pairs).encode());
+        assertThatThrownBy(() -> verifier.verifyWithTrustedCerts(token, List.of(helper.issuerCert)))
+                .hasMessageContaining("exactly one document");
+    }
+
     @Nested
     class BackwardCompatibility {
 

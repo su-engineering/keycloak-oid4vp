@@ -13,7 +13,7 @@ The namespace changes Java class names. Code that imports these classes must upd
 | Claim mappers | `oid4vp-user-attribute-mapper`, `oid4vp-user-session-mapper` |
 | OpenKYC login theme | Renamed from `oid4vp` to `openkyc`; update the realm selection |
 | DID configuration | Existing keys and defaults, including opt-in `didResolutionEnabled` |
-| Login state | Existing request handles, nonce binding, shared-store keys and JSON shape |
+| Login state | Existing request handles and nonce binding; new requests additionally save full DCQL and identity-query selection |
 | Runtime pins | Root Compose / Maven: 26.5.5; Coolify Dockerfile: 26.5.4 |
 
 The namespace cleanup did not change verification logic or credential acceptance policy. License notices are included in the provider JAR. The subsequent realm and theme changes below require explicit configuration updates.
@@ -29,6 +29,14 @@ The previous OpenKYC import is retained at `deployment/examples/realm-openkyc.js
 The Dockerfile imports one selected file and no longer generates verifier keys or certificates during the image build. New generic deployments configure that material through **Identity providers → oid4vp**. Existing OpenKYC deployments already used the static import that overwrote the generated file.
 
 Manual DCQL JSON is now structurally validated on provider creation, import, and Admin Console/API updates. Previously accepted malformed queries must be corrected before saving; clearing the field selects mapper-derived requests. The saved query and its conditions are preserved. See [DCQL editing and current response-policy limits](dcql.md).
+
+## DID method enforcement and did:webvh
+
+`did:webvh` is opt-in: enable DID resolution and add `did:webvh` to **Allowed DID Methods**. The default remains `did:web`. See [the WebVH guide](did-webvh.md).
+
+**Allowed DID Methods is now enforced.** When DID resolution is enabled, disallowed or unsupported DID issuers and resolution failures reject the presentation instead of falling back to certificates or issuer metadata. Review existing values and issuer reachability before upgrading. For example, a provider configured with only `did:webvh` will reject `did:web` issuers. WebVH credentials cannot bypass history verification by attaching an X.509 certificate, including when DID resolution is disabled. HTTPS issuer certificate/metadata verification is unchanged.
+
+The legacy did:web document/key and URL behavior remains otherwise unchanged. WebVH uses its own stricter resolver and only current assertion keys.
 
 ## Repository rename
 
@@ -65,3 +73,11 @@ The current pins are a compatibility baseline, not a long-term support commitmen
 - Staging, database migration rehearsal, and image/database rollback.
 
 No automated Maven Central publishing or GitHub release workflow is enabled in this baseline.
+
+## DCQL multi-credential verification
+
+Start fresh login flows after upgrading: old in-flight request contexts without a saved DCQL query are rejected. Responses now enforce query ID, format/type, required sets, claim paths and exact `values`, so wallets that previously returned incomplete or mismatched credentials can fail. Review existing manual queries and test your wallet before rollout. Query IDs must use letters, numbers, underscores or hyphens; put type URIs or mDoc doctypes in `meta`, not the ID.
+
+Use presentation arrays in JSON `vp_token` entries. Bare tokens remain supported only when one query ID is possible. Configure **Identity Credential Query ID** for multi-credential logins and scope mappers by query ID or type. Scalar mappings that match multiple presentations now reject ambiguity. Multi-valued session-note arrays now retain all values as JSON instead of selecting the first value. Unbound credential requests are rejected, and mDoc login requires device authentication and one document per DeviceResponse. Explicit `meta` objects are preserved; legacy inference applies only when `meta` is omitted.
+
+See [multi-credential setup](multiple-credential-types.md#require-several-credentials-in-one-login).

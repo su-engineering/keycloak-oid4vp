@@ -104,8 +104,16 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                         "Full DCQL JSON for your credential types (SD-JWT VC or mDoc), claim paths, expected "
                                 + "values, claim_sets, and credential_sets. This query takes precedence over mappers; "
                                 + "leave empty to derive the request from mappers. Query structure is validated when saved. "
-                                + "Claim-value conditions guide wallet selection; this provider does not enforce them as login rules.")
+                                + "Returned credentials must satisfy query IDs, types, required sets, claim paths and expected values.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.IDENTITY_CREDENTIAL_ID)
+                .label("Identity Credential Query ID")
+                .helpText("DCQL query ID supplying the login identity and default claims. If blank, uses the first "
+                        + "returned query in request order. Persistent credential-based login requires exactly one "
+                        + "presentation for that query. Other credentials are verified and available to mappers.")
+                .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
                 .property()
                 .name(Oid4vpIdentityProviderConfig.USER_MAPPING_CLAIM)
@@ -288,7 +296,7 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .property()
                 .name(Oid4vpIdentityProviderConfig.DID_RESOLUTION_ENABLED)
                 .label("Enable DID Resolution")
-                .helpText("Enable resolution of issuer DIDs (e.g., did:web) to fetch verification keys. "
+                .helpText("Resolve did:web or did:webvh SD-JWT issuer verification keys. "
                         + "When enabled, the issuer's DID document is fetched and parsed to extract public keys for credential verification. "
                         + "Disabled by default for backward compatibility.")
                 .type(ProviderConfigProperty.BOOLEAN_TYPE)
@@ -297,17 +305,19 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .property()
                 .name(Oid4vpIdentityProviderConfig.ALLOWED_DID_METHODS)
                 .label("Allowed DID Methods")
-                .helpText("Comma-separated list of allowed DID methods for resolution (e.g., 'did:web,did:key'). "
-                        + "Only DIDs with these prefixes will be resolved. Defaults to 'did:web'.")
+                .helpText(
+                        "Comma-separated methods: did:web and/or did:webvh. For both, use 'did:web,did:webvh'. "
+                                + "Only enabled methods are accepted. Failed DID resolution rejects the credential. Defaults to 'did:web'.")
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .defaultValue("did:web")
                 .add()
                 .property()
                 .name(Oid4vpIdentityProviderConfig.DID_CACHE_TTL_SECONDS)
                 .label("DID Cache TTL (seconds)")
-                .helpText("Time-to-live for cached DID documents. "
-                        + "DID documents are cached to avoid repeated network requests. "
-                        + "Default is 3600 seconds (1 hour).")
+                .helpText(
+                        "Maximum time-to-live for cached DID documents. did:webvh also respects the log TTL; zero disables its cache. "
+                                + "DID documents are cached to avoid repeated network requests. "
+                                + "Default is 3600 seconds (1 hour).")
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .defaultValue(String.valueOf(Oid4vpIdentityProviderConfig.DEFAULT_DID_CACHE_TTL_SECONDS))
                 .add()

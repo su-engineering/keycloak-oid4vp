@@ -16,6 +16,9 @@
  */
 package io.github.suengineering.keycloak.oid4vp.verification;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.suengineering.keycloak.oid4vp.Oid4vpIdentityProviderConfig;
 import io.github.suengineering.keycloak.oid4vp.domain.MdocVerificationResult;
@@ -27,9 +30,9 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.IdentityBrokerException;
 import org.keycloak.models.KeycloakSession;
@@ -38,7 +41,7 @@ import org.keycloak.utils.StringUtil;
 /**
  * Top-level processor for VP tokens received from wallets.
  *
- * <p>Handles format detection (SD-JWT vs mDoc), single-credential VP tokens,
+ * <p>Handles SD-JWT and mDoc presentations grouped by DCQL query ID,
  * signature verification (delegated to {@link SdJwtVerifier} / {@link MdocVerifier}),
  * trust list validation, and revocation checking (via {@link StatusListVerifier}).
  *
@@ -47,7 +50,6 @@ import org.keycloak.utils.StringUtil;
 public class VpTokenProcessor {
 
     private static final Logger LOG = Logger.getLogger(VpTokenProcessor.class);
-    private static final String DEFAULT_CREDENTIAL_ID = "cred1";
 
     private final SdJwtVerifier sdJwtVerifier;
     private final MdocVerifier mdocVerifier;
@@ -77,7 +79,8 @@ public class VpTokenProcessor {
             String expectedNonce,
             String alternateResponseUri,
             String mdocGeneratedNonce,
-            String encryptionJwkThumbprint) {}
+            String encryptionJwkThumbprint,
+            String dcqlQuery) {}
 
     public VpTokenProcessor(ObjectMapper objectMapper, Config config) {
         this.sdJwtVerifier = new SdJwtVerifier(
@@ -129,27 +132,31 @@ public class VpTokenProcessor {
         LOG.debugf("Trust list provides %d trusted keys", trustedCerts.size());
 
         try {
-            // Detect format: single credential or a JSON wrapper around one credential
-            if (request.vpToken().trim().startsWith("{")) {
-                return processMultiCredential(
-                        request.vpToken(),
-                        request.clientId(),
-                        request.expectedNonce(),
-                        trustedCerts,
-                        request.alternateResponseUri(),
-                        request.mdocGeneratedNonce(),
-                        request.encryptionJwkThumbprint());
+            DcqlResponseValidator dcql = new DcqlResponseValidator(request.dcqlQuery());
+            Map<String, List<String>> presentations = parsePresentations(request.vpToken(), dcql);
+            dcql.validateSelection(presentations);
+            Map<String, List<VerifiedCredential>> verified = new LinkedHashMap<>();
+            // Request order, never wallet-controlled JSON object order, determines the default identity.
+            for (String id : dcql.credentialIds()) {
+                if (!presentations.containsKey(id)) continue;
+                List<VerifiedCredential> credentials = new ArrayList<>();
+                for (String presentation : presentations.get(id)) {
+                    VerifiedCredential credential = verifyCredential(
+                            id,
+                            presentation,
+                            request.clientId(),
+                            request.expectedNonce(),
+                            trustedCerts,
+                            request.alternateResponseUri(),
+                            request.mdocGeneratedNonce(),
+                            request.encryptionJwkThumbprint());
+                    if (credential == null) throw new IdentityBrokerException("Unsupported VP token format for " + id);
+                    dcql.validateCredential(credential);
+                    credentials.add(credential);
+                }
+                verified.put(id, credentials);
             }
-
-            return processSingleCredential(
-                    request.vpToken(),
-                    request.clientId(),
-                    request.expectedNonce(),
-                    trustedCerts,
-                    request.alternateResponseUri(),
-                    request.mdocGeneratedNonce(),
-                    request.encryptionJwkThumbprint());
-
+            return new VpTokenResult(verified);
         } catch (IdentityBrokerException e) {
             throw e;
         } catch (Exception e) {
@@ -157,92 +164,40 @@ public class VpTokenProcessor {
         }
     }
 
-    private VpTokenResult processSingleCredential(
-            String vpToken,
-            String clientId,
-            String expectedNonce,
-            List<X509Certificate> trustedCerts,
-            String alternateResponseUri,
-            String mdocGeneratedNonce,
-            String encryptionJwkThumbprint) {
-
-        VerifiedCredential cred = verifyCredential(
-                DEFAULT_CREDENTIAL_ID,
-                vpToken,
-                clientId,
-                expectedNonce,
-                trustedCerts,
-                alternateResponseUri,
-                mdocGeneratedNonce,
-                encryptionJwkThumbprint);
-        if (cred == null) {
-            throw new IdentityBrokerException("Unsupported VP token format");
+    private Map<String, List<String>> parsePresentations(String vpToken, DcqlResponseValidator dcql) throws Exception {
+        if (StringUtil.isBlank(vpToken)) throw new IdentityBrokerException("Missing vp_token");
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        if (!vpToken.stripLeading().startsWith("{")) {
+            // Compatibility with older wallets is safe only when the query ID is unambiguous.
+            if (dcql.credentialIds().size() != 1) {
+                throw new IdentityBrokerException("Multiple credential queries require a JSON vp_token object");
+            }
+            result.put(dcql.credentialIds().get(0), List.of(vpToken));
+            return result;
         }
-
-        return new VpTokenResult(Map.of(DEFAULT_CREDENTIAL_ID, cred), cred.claims());
-    }
-
-    @SuppressWarnings("unchecked")
-    private VpTokenResult processMultiCredential(
-            String vpToken,
-            String clientId,
-            String expectedNonce,
-            List<X509Certificate> trustedCerts,
-            String alternateResponseUri,
-            String mdocGeneratedNonce,
-            String encryptionJwkThumbprint) {
-
-        try {
-            Map<String, Object> wrapper = objectMapper.readValue(vpToken, Map.class);
-            List<VerifiedCredential> credentials = new ArrayList<>();
-
-            for (Map.Entry<String, Object> entry : wrapper.entrySet()) {
-                String credentialId = entry.getKey();
-                for (String credential : extractCredentialStrings(entry.getValue())) {
-                    VerifiedCredential cred = verifyCredential(
-                            credentialId,
-                            credential,
-                            clientId,
-                            expectedNonce,
-                            trustedCerts,
-                            alternateResponseUri,
-                            mdocGeneratedNonce,
-                            encryptionJwkThumbprint);
-                    if (cred != null) {
-                        credentials.add(cred);
-                    }
+        JsonNode wrapper = objectMapper
+                .reader()
+                .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+                .readTree(vpToken);
+        for (var fields = wrapper.fields(); fields.hasNext(); ) {
+            var field = fields.next();
+            JsonNode values = field.getValue();
+            if (!values.isArray() || values.isEmpty()) {
+                throw new IdentityBrokerException(
+                        "vp_token entry must be a non-empty presentation array: " + field.getKey());
+            }
+            List<String> tokens = new ArrayList<>();
+            for (JsonNode value : values) {
+                if (!value.isTextual() || value.textValue().isBlank()) {
+                    throw new IdentityBrokerException(
+                            "vp_token presentations must be non-empty strings: " + field.getKey());
                 }
+                tokens.add(value.textValue());
             }
-
-            if (credentials.isEmpty()) {
-                throw new IdentityBrokerException("No valid credentials found in multi-credential VP token");
-            }
-
-            VerifiedCredential primary = credentials.get(0);
-            boolean mixedCredentialTypes = credentials.stream()
-                    .skip(1)
-                    .map(VerifiedCredential::credentialType)
-                    .anyMatch(type -> !Objects.equals(type, primary.credentialType()));
-            if (mixedCredentialTypes) {
-                throw new IdentityBrokerException("Only one credential type is currently supported in vp_token");
-            }
-
-            return new VpTokenResult(Map.of(primary.credentialId(), primary), primary.claims());
-        } catch (IdentityBrokerException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IdentityBrokerException("Failed to process multi-credential VP token: " + e.getMessage(), e);
+            result.put(field.getKey(), tokens);
         }
-    }
-
-    private List<String> extractCredentialStrings(Object value) {
-        if (value instanceof List<?> list && !list.isEmpty()) {
-            return list.stream().map(Object::toString).toList();
-        }
-        if (value instanceof String s) {
-            return List.of(s);
-        }
-        return List.of();
+        return result;
     }
 
     private VerifiedCredential verifyCredential(
@@ -258,6 +213,9 @@ public class VpTokenProcessor {
         if (sdJwtVerifier.isSdJwt(credential)) {
             SdJwtVerificationResult result =
                     verifySdJwtWithFallback(credential, clientId, expectedNonce, trustedCerts, alternateResponseUri);
+            if (StringUtil.isBlank(result.issuer())) {
+                throw new IdentityBrokerException("SD-JWT credential has no issuer: " + credentialId);
+            }
             statusListVerifier.checkRevocationStatus(result.claims());
             return new VerifiedCredential(
                     credentialId, result.issuer(), result.credentialType(), result.claims(), PresentationType.SD_JWT);

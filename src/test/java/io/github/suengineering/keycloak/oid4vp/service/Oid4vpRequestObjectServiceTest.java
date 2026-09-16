@@ -65,6 +65,7 @@ class Oid4vpRequestObjectServiceTest {
         Oid4vpIdentityProvider provider = mock(Oid4vpIdentityProvider.class);
         Oid4vpIdentityProviderConfig config = mock(Oid4vpIdentityProviderConfig.class);
         when(config.getAlias()).thenReturn("oid4vp");
+        when(config.getIdentityCredentialId()).thenReturn("identity");
         when(config.isEnforceHaip()).thenReturn(true);
         when(config.getClientIdScheme()).thenReturn("x509_hash");
         when(config.getResolvedResponseMode()).thenReturn(Oid4vpResponseMode.DIRECT_POST_JWT);
@@ -125,6 +126,10 @@ class Oid4vpRequestObjectServiceTest {
         assertThat(requestContextCaptor.getAllValues()).hasSize(2);
         assertThat(requestContextCaptor.getAllValues().get(0).requestHandle()).isEqualTo("handle-1");
         assertThat(requestContextCaptor.getAllValues().get(1).requestHandle()).isEqualTo("handle-1");
+        assertThat(requestContextCaptor.getAllValues().get(0).dcqlQuery())
+                .isEqualTo(values.get(0).dcqlQuery());
+        assertThat(requestContextCaptor.getAllValues().get(0).identityCredentialId())
+                .isEqualTo("identity");
         verify(authSession, never()).setAuthNote(any(), any());
     }
 

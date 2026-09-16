@@ -48,8 +48,9 @@ Use **Identity providers → oid4vp → Settings → DCQL Query (JSON)** to edit
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `dcqlQuery` | DCQL query JSON defining which credentials to request. If omitted, Keycloak derives the query from configured OID4VP mappers. Manual queries are normalized by filling in missing format metadata and, when enabled, `trusted_authorities`. | *(auto-generated)* |
+| `dcqlQuery` | DCQL query JSON defining which credentials to request. If omitted, Keycloak derives the query from configured OID4VP mappers. Manual queries with omitted `meta` receive legacy type inference from their ID; explicit metadata is preserved and, when enabled, `trusted_authorities` is added. | *(auto-generated)* |
 | `credentialSetMode` | How credential sets are combined: `optional` or `all`. | `optional` |
+| `identityCredentialId` | DCQL query ID providing the login identity and default claims. Must return exactly one presentation when set. | *(first returned query in request order)* |
 | `credentialSetPurpose` | Human-readable purpose string included in the DCQL credential set. | *(none)* |
 | `requestObjectLifespanSeconds` | Lifespan of the signed request object JWT used by the wallet fetch. | `10` |
 
@@ -118,17 +119,14 @@ This mode is intended for credentials that do not carry a stable account identif
 
 For SD-JWT VC verification, issuer-key resolution follows this order:
 
-1. If enabled and the issuer is a supported DID, resolve did:web keys. This step precedes strict X.509 handling; resolution failure falls through to the existing paths.
+1. If DID resolution is enabled and the issuer is a DID, resolve it through its explicitly allowed `did:web` or `did:webvh` method. Failure, an unsupported method, or an empty key set rejects the credential; it cannot fall through to certificate or metadata verification. `did:webvh` also rejects when DID resolution is disabled.
 2. Validate an `x5c` certificate chain against the configured trust list.
 3. Outside strict X.509 mode, try JWT VC issuer metadata via `iss` and JOSE `kid` at `/.well-known/jwt-vc-issuer`, including `jwks_uri`.
 4. Outside strict X.509 mode, try direct trusted certificates as the final fallback.
 
 With DID resolution disabled, `enforceHaip=true` restricts this to the `x5c` path. With DID resolution enabled, the earlier DID path is still attempted. Use `enforceHaip=false` for the existing DID flow and read the [DID limitations](#didweb-issuer-verification).
 
-By default, the verifier only trusts the credential types this IdP actually requested in its DCQL query. Those types come from:
-
-- the configured `dcqlQuery`, or
-- mapper-derived credential types when `dcqlQuery` is empty
+Every returned credential is matched to its own ID in the DCQL query saved for that login. Format, supplied type metadata, claim paths, expected values and required sets are evaluated. Queries can come from the full JSON editor or configured mappers. See [DCQL acceptance rules](dcql.md#request-conditions-and-login-policy).
 
 Use one OID4VP IdP instance per trust domain. If `trustListLoTEType` is configured, it must match the fetched trust list's `ListAndSchemeInformation.LoTEType`. If it is left empty, all LoTE types from that trust list are accepted and the provider logs a warning.
 Within the accepted trust list, credential signature verification uses only `.../SvcType/.../Issuance` services. Status-list JWT verification uses only `.../SvcType/.../Revocation` services.
@@ -160,7 +158,7 @@ The extension provides two mapper types:
 - `OID4VP Claim to User Attribute`
 - `OID4VP Claim to User Session Note`
 
-Each mapper declares a credential format, credential type, and claim path. When `dcqlQuery` is not set manually, these mappers drive the generated DCQL request.
+Each mapper can select a DCQL query ID, credential format, credential type, and claim path. Claims from different credentials are retained separately; see [multi-credential mapping](multiple-credential-types.md#identity-and-claim-mapping). When `dcqlQuery` is not set manually, these mappers drive the generated DCQL request.
 
 ## Multi-Node Behavior
 
@@ -168,17 +166,17 @@ Cross-device completion depends on a shared Keycloak `SingleUseObjectProvider`. 
 
 ## did:web issuer verification
 
-DID issuer verification is opt-in and is independent of the verifier certificate used to sign wallet requests.
+DID issuer verification is opt-in and is independent of the verifier certificate used to sign wallet requests. These settings apply to both methods; see [did:webvh setup and validation](did-webvh.md) for the history-verifying resolver.
 
 | Key | Behavior in this compatibility baseline | Default |
 | --- | --- | --- |
-| `didResolutionEnabled` | Resolve `did:web` credential issuers before trying certificate-based verification. | `false` |
+| `didResolutionEnabled` | Resolve enabled DID methods for SD-JWT issuers. Resolution failure rejects the credential. | `false` |
 | `didCacheTtlSeconds` | Lifetime of entries in each resolver instance's in-memory cache. | `3600` |
-| `allowedDidMethods` | Stored/admin-visible setting. Currently not enforced by the verification path; only `did:web` is implemented. | `did:web` |
+| `allowedDidMethods` | Enforced comma-separated method list: `did:web`, `did:webvh`, or both. | `did:web` |
 | `allowedIssuers` | Existing SD-JWT issuer policy. Use explicit issuer DIDs for restricted deployments. | Existing wildcard policy |
 
 The deployed resolver fetches a host DID from `https://issuer.example/.well-known/did.json`. It currently fetches a path DID such as `did:web:issuer.example:tenant` from `https://issuer.example/tenant/.well-known/did.json`. That path behavior differs from the standard `/tenant/did.json` layout and is preserved for compatibility. Encoded-port handling also needs a migration review.
 
 The resolver supports JWK public keys including EC and Ed25519. Its multibase implementation accepts only the specific Ed25519 forms implemented in `DidWebResolver`; do not assume all multibase/multicodec documents are supported.
 
-Current limitations: `kid` filtering, document identity/controller validation, and assertion-method authorization are not enforced. DID resolution precedes strict X.509 handling, so enabling it is not a claim of HAIP conformance. Use `enforceHaip=false` for the existing DID flow and review the [readiness plan](enterprise-readiness.md) before changing trust policy.
+Current `did:web` limitations: `kid` filtering, document identity/controller validation, and assertion-method authorization are not enforced by this compatibility resolver. The separate `did:webvh` resolver enforces those checks. DID resolution precedes strict X.509 handling, so enabling it is not a claim of HAIP conformance. Use `enforceHaip=false` for the existing DID flow and review the [readiness plan](enterprise-readiness.md) before changing trust policy.

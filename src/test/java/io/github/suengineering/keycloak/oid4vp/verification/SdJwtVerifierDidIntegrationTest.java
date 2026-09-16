@@ -136,41 +136,37 @@ class SdJwtVerifierDidIntegrationTest {
     }
 
     @Nested
-    class FallbackToX5c {
+    class DidFailureAndX5cIsolation {
 
         @Test
-        void verify_didResolutionFails_fallsBackToX5c() throws Exception {
-            String issuer = "did:web:failing-issuer.com";
-            when(didResolver.supports(issuer)).thenReturn(true);
-            when(didResolver.resolve(eq(issuer), any())).thenThrow(new RuntimeException("Network error"));
-
-            String sdJwt = buildSdJwtWithProperX5cChain();
-            SdJwtVerificationResult result = verifier.verify(sdJwt, null, null, List.of(x509Cert));
-
-            assertThat(result.issuer()).isEqualTo("https://fallback-issuer.example");
-        }
-
-        @Test
-        void verify_didResolverReturnsEmptyList_fallsBackToX5c() throws Exception {
-            String issuer = "did:web:no-keys-issuer.com";
-            when(didResolver.supports(issuer)).thenReturn(true);
-            when(didResolver.resolve(eq(issuer), any())).thenReturn(List.of());
-
-            String sdJwt = buildSdJwtWithProperX5cChain();
-            SdJwtVerificationResult result = verifier.verify(sdJwt, null, null, List.of(x509Cert));
-
-            assertThat(result.issuer()).isEqualTo("https://fallback-issuer.example");
-        }
-
-        @Test
-        void verify_didResolverDoesNotSupportIssuer_fallsBackToX5c() throws Exception {
-            String issuer = "did:web:unsupported.com";
-            when(didResolver.supports(issuer)).thenReturn(false);
-
-            String sdJwt = buildSdJwtWithProperX5cChain();
-            SdJwtVerificationResult result = verifier.verify(sdJwt, null, null, List.of(x509Cert));
-
-            assertThat(result.issuer()).isEqualTo("https://fallback-issuer.example");
+        void verify_didFailureCannotBeBypassedWithValidX5c() throws Exception {
+            var entityCert = generateCaSignedCert(x509SigningKey, caKey, x509Cert);
+            for (String issuer : List.of("did:web:issuer.example", "did:webvh:QmExample:issuer.example")) {
+                String presentation = buildSignedJwtWithX5c(
+                                Map.of("iss", issuer, "vct", "Membership"),
+                                x509SigningKey,
+                                List.of(entityCert, x509Cert))
+                        + "~";
+                when(didResolver.supports(issuer)).thenReturn(false);
+                assertThatThrownBy(() -> verifier.verify(presentation, null, null, List.of(x509Cert)))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("disabled or unsupported");
+                when(didResolver.supports(issuer)).thenReturn(true);
+                when(didResolver.resolve(eq(issuer), any())).thenReturn(List.of());
+                assertThatThrownBy(() -> verifier.verify(presentation, null, null, List.of(x509Cert)))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("DID resolution failed");
+                when(didResolver.resolve(eq(issuer), any())).thenThrow(new DidResolutionException("Invalid history"));
+                assertThatThrownBy(() -> verifier.verify(presentation, null, null, List.of(x509Cert)))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("DID resolution failed");
+                if (issuer.startsWith("did:webvh:")) {
+                    assertThatThrownBy(() -> new SdJwtVerifier(60, 300, null)
+                                    .verify(presentation, null, null, List.of(x509Cert)))
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessageContaining("disabled or unsupported");
+                }
+            }
         }
 
         @Test

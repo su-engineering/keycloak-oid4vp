@@ -87,7 +87,9 @@ class Oid4vpAuthSessionResolverTest {
                         "nonce",
                         null,
                         null,
-                        List.of()));
+                        List.of(),
+                        null,
+                        null));
 
         AuthenticationSessionModel resolved = resolver.resolveFromStore("tab-1.random", null);
 
@@ -141,6 +143,8 @@ class Oid4vpAuthSessionResolverTest {
                 "nonce",
                 null,
                 null,
-                List.of());
+                List.of(),
+                null,
+                null);
     }
 }

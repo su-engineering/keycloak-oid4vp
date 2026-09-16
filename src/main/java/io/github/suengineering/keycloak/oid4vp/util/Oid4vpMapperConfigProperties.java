@@ -31,6 +31,7 @@ import org.keycloak.provider.ProviderConfigProperty;
  */
 public final class Oid4vpMapperConfigProperties {
 
+    public static final String CREDENTIAL_QUERY_ID = "credential.query.id";
     public static final String CREDENTIAL_FORMAT = "credential.format";
     public static final String CREDENTIAL_TYPE = "credential.type";
     public static final String CLAIM_PATH = "claim";
@@ -38,6 +39,18 @@ public final class Oid4vpMapperConfigProperties {
     public static final String OPTIONAL = "optional";
 
     private Oid4vpMapperConfigProperties() {}
+
+    public static ProviderConfigProperty credentialQueryId() {
+        ProviderConfigProperty prop = new ProviderConfigProperty();
+        prop.setName(CREDENTIAL_QUERY_ID);
+        prop.setLabel("Credential Query ID");
+        prop.setHelpText(
+                "Optional DCQL query ID to map from, for example membership or license. Format/type filters "
+                        + "also apply. Multiple matching presentations require Multi-Valued mapping. Leave all filters "
+                        + "blank to use the login identity credential. This field selects responses; it does not rename generated queries.");
+        prop.setType(ProviderConfigProperty.STRING_TYPE);
+        return prop;
+    }
 
     public static ProviderConfigProperty credentialFormat() {
         ProviderConfigProperty prop = new ProviderConfigProperty();
@@ -80,7 +93,7 @@ public final class Oid4vpMapperConfigProperties {
         prop.setName(MULTIVALUED);
         prop.setLabel("Multi-Valued");
         prop.setHelpText("Enable for array-valued claims (e.g., nationalities). "
-                + "Stores all values as a multi-valued Keycloak attribute.");
+                + "Stores all values as a multi-valued custom Keycloak attribute; session-note arrays use JSON.");
         prop.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         prop.setDefaultValue("false");
         return prop;
@@ -97,6 +110,7 @@ public final class Oid4vpMapperConfigProperties {
     }
 
     public static void addCommonProperties(List<ProviderConfigProperty> properties) {
+        properties.add(credentialQueryId());
         properties.add(credentialFormat());
         properties.add(credentialType());
         properties.add(claimPath());

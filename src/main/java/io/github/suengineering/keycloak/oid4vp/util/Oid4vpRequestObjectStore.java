@@ -77,7 +77,9 @@ public class Oid4vpRequestObjectStore {
             String nonce,
             String encryptionKeyJson,
             String encryptionJwkThumbprint,
-            List<String> configuredCredentialTypes) {}
+            List<String> configuredCredentialTypes,
+            String dcqlQuery,
+            String identityCredentialId) {}
 
     /** Stores a request handle → stable flow context mapping. Called when the login page is rendered. */
     public void storeFlowHandle(KeycloakSession session, String requestHandle, FlowContextEntry entry) {

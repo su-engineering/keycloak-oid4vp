@@ -6,14 +6,16 @@ The deployed did:web SD-JWT flow is the compatibility baseline. These findings c
 
 | Area | Current evidence | Proposed acceptance criteria |
 | --- | --- | --- |
-| DID key authorization | `DidWebResolver.filterByKeyId` returns every verifier; the resolver does not validate document `id`, controller, or `assertionMethod`. | Reject unrelated documents, unknown `kid`, and unauthorized assertion keys; test rotation and existing issuer documents. |
-| DID URLs | Path DIDs use `/<path>/.well-known/did.json`; the identifier is decoded before splitting on colons. | Agree a migration to standard path/port handling with deliberate compatibility for deployed issuers. |
-| Network access | DID fetches use credential-supplied locations without an explicit destination allow-list, document-size bound, or bounded shared cache in the resolver. | Define HTTPS/egress policy, redirects, timeouts, size bounds, and bounded caching. |
-| Configuration | `allowedDidMethods` is exposed but not used to select the resolver. DID resolution runs before strict X.509 handling. | Specify and test method enforcement, fallback policy, and high-assurance profile interaction. |
-| Issuer policy | The callback checks the primary credential issuer; multi-credential trust needs review. | Enforce issuer policy for every credential used to authenticate or populate claims. |
-| DCQL conditions | The Admin Console accepts and validates request JSON; response processing checks requested credential types but does not fully evaluate claim paths, expected values, or set satisfaction. Mixed credential types are rejected and same-type responses retain only the primary credential. | Add explicit acceptance-policy evaluation against the request saved for that login, with negative tests for missing or mismatched claims and sets. |
+| did:web key authorization | `DidWebResolver.filterByKeyId` returns every verifier; the resolver does not validate document `id`, controller, or `assertionMethod`. | Reject unrelated documents, unknown `kid`, and unauthorized assertion keys; test rotation and existing issuer documents. |
+| did:web URLs | Path DIDs use `/<path>/.well-known/did.json`; the identifier is decoded before splitting on colons. | Agree a migration to standard path/port handling with deliberate compatibility for deployed issuers. |
+| Network access | Legacy did:web fetches lack size/cache bounds. did:webvh has bounded reads/cache and rejects redirects; both use credential-supplied DNS locations without an explicit destination allow-list. | Define HTTPS/egress policy, redirects, timeouts, size bounds, and bounded caching. |
+| Configuration | `allowedDidMethods` now selects the resolver; enabled DID resolution fails closed. DID resolution runs before strict X.509 handling. | Validate the deployed issuer migration and high-assurance profile interaction. |
+| Issuer policy | Issuer allow-lists apply to every SD-JWT credential; each mDoc uses certificate trust. | Continue independent trust-policy review and conformance testing. |
+| DCQL conditions | Responses are checked against saved query IDs, formats, types, paths, values and required sets. Mixed formats and repeated presentations are retained separately. | Add wallet interoperability and conformance coverage; cross-credential subject relationships and arbitrary condition languages remain outside this policy. |
 | Login completion | Completion uses public request handles plus the authentication session; later designs add a single-use response code and reject repeated successful submissions. | Reproduce relevant attacks, then test replay rejection, abandoned-attempt isolation, and cross-device completion across nodes. |
 | Revocation | The static status-list cache uses only the URI; decompression is unbounded; without trust certificates, signature verification is skipped. | Isolate cache entries by trust policy, bound decompression, and define signed-status trust for DID issuers. |
+
+The `did:webvh` path validates signed history, required witnesses, current assertion keys and `kid`. Current-state resolution does not persist rollback checkpoints or consult watchers. See [its supported profile and limits](did-webvh.md).
 
 ## Reliable operation
 

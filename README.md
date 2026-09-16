@@ -2,7 +2,7 @@
 
 **Digital credentials. Familiar Keycloak login.**
 
-Add wallet sign-in to Keycloak with **did:web-issued SD-JWT credentials** and **X.509-backed credentials**. The extension requests a presentation, verifies it, and maps disclosed claims into a Keycloak identity or session. Applications keep using their existing Keycloak integration.
+Add wallet sign-in to Keycloak with **did:web- and did:webvh-issued SD-JWT credentials** and **X.509-backed credentials**. The extension requests a presentation, verifies it, and maps disclosed claims into a Keycloak identity or session. Applications keep using their existing Keycloak integration.
 
 Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) · Java 21 · Keycloak 26.5.4 / 26.5.5
 
@@ -17,10 +17,11 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | Capability | Current behavior |
 | --- | --- |
 | **did:web issuer verification** | Opt-in HTTPS DID resolution for SD-JWT issuer keys, including EC and Ed25519; signature, disclosures, and holder binding are verified. |
+| **did:webvh issuer verification** | Opt-in WebVH v1.0 history and witness validation, current assertion keys, and strict key-ID selection. [Setup and limits](docs/did-webvh.md). |
 | **Certificate-based verification** | X.509 issuer verification and ETSI trust-list integration; issuer-metadata fallback outside strict X.509 mode. |
 | **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
 | **Wallet interaction** | Same-device links and cross-device QR codes, with server-sent events to resume browser login. |
-| **Presentation requests** | DCQL credential and claim selection; `direct_post` and encrypted `direct_post.jwt` responses. |
+| **Presentation requests** | Multiple credentials per login, DCQL required/alternative sets and verified claim conditions; `direct_post` and encrypted `direct_post.jwt` responses. |
 | **Keycloak integration** | Claim-to-user-attribute and claim-to-session-note mappers; optional transient users. |
 | **Login themes** | Neutral `su-engineering` and OpenKYC `openkyc`; select per realm. |
 
@@ -28,7 +29,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 
 `0.1.0-SNAPSHOT` is a development baseline. The did:web SD-JWT flow is deployed, and CI is configured to test both pinned Keycloak versions. Public releases and enterprise support are being prepared.
 
-**Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** In particular, DID key authorization and standard path/port handling need further work. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
+**Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** In particular, the legacy did:web resolver's key authorization and standard path/port handling need further work. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
 
 ## Try it locally
 
@@ -50,12 +51,14 @@ Follow the [five-minute walkthrough](docs/quickstart.md) to complete a login wit
 flowchart LR
     App[Your application] <-->|OIDC login| KC[Keycloak + OID4VP extension]
     Wallet[Credential wallet] -->|Presentation| KC
-    KC -->|HTTPS public keys| DID[did:web document]
+    KC -->|HTTPS public keys| DID[DID document or validated WebVH history]
     KC -->|Certificate trust| TL[ETSI trust list]
     KC -->|Revocation checks| SL[Status list]
 ```
 
 The wallet proves possession of a credential. The extension verifies the presentation under the realm's configuration, then lets Keycloak complete authentication. The application receives its normal Keycloak response. See [architecture and protocol diagrams](docs/diagrams.md) for the trust boundaries and completion flow.
+
+For multiple credential policies on one server, use [DCQL combinations, multiple providers or separate realms](docs/multiple-credential-types.md). A realm per credential type is optional; separate realms isolate users and SSO.
 
 ## Install in an existing Keycloak instance
 

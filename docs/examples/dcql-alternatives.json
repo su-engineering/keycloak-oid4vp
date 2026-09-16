@@ -1,0 +1,19 @@
+{
+  "credentials": [
+    {
+      "id": "membership",
+      "format": "dc+sd-jwt",
+      "meta": {"vct_values": ["https://credentials.example.com/membership"]},
+      "claims": [{"path": ["sub"]}]
+    },
+    {
+      "id": "license",
+      "format": "dc+sd-jwt",
+      "meta": {"vct_values": ["https://credentials.example.com/professional-license"]},
+      "claims": [{"path": ["sub"]}]
+    }
+  ],
+  "credential_sets": [
+    {"options": [["membership"], ["license"]], "required": true}
+  ]
+}

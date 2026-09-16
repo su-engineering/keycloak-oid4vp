@@ -134,3 +134,11 @@ The generated realm is ignored by Git. The root Compose file mounts that generat
 ## Conformance and load testing
 
 Live OIDF conformance requires the explicit `conformance` profile, credentials, and a reachable HTTPS verifier. See [conformance](conformance.md). The clustered browser/SSE workload is documented in [load testing](../loadtest/README.md).
+
+## WebVH dependency and packaging checks
+
+`didwebvh-core` is pinned to 0.3.1. Its log/witness validators run behind strict JSON, proof-profile, DID identity and key-authorization checks. The provider supplies an Apache-2.0 `Base58Btc` adapter with the upstream API; Maven excludes both the upstream facade class and its NovaCrypto dependency when shading. Do not remove the exclusion or change the adapter API without updating the packaging smoke check. Gson and Bouncy Castle come from Keycloak. The upstream HTTP client and unused multihash dependency are excluded.
+
+Before upgrading the dependency, run the WebVH tests and the full unit suite, inspect the shaded JAR for duplicate facade classes or unexpected runtime dependencies, and exercise signed WebVH resolution using the packaged provider with the pinned Keycloak runtime libraries. [Fixture provenance](../src/test/resources/did-webvh/README.md) records the independent histories used by the tests. This is regression coverage, not WebVH certification.
+
+Run the packaging check without Docker using `./mvnw verify -Dit.test=DidWebVhPackagingIT`. This runs the unit suite and only the artifact-packaging integration test; it does not exercise the wallet/browser E2E suite.

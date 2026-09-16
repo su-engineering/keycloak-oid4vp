@@ -1,0 +1,27 @@
+{
+  "credentials": [
+    {
+      "id": "membership",
+      "format": "dc+sd-jwt",
+      "meta": {
+        "vct_values": ["https://credentials.example.com/membership"]
+      },
+      "claims": [
+        { "path": ["sub"] },
+        { "path": ["membership", "active"], "values": [true] },
+        { "path": ["membership", "tier"], "values": ["gold", "platinum"] }
+      ]
+    },
+    {
+      "id": "license",
+      "format": "dc+sd-jwt",
+      "meta": {
+        "vct_values": ["https://credentials.example.com/professional-license"]
+      },
+      "claims": [
+        { "path": ["license_number"] },
+        { "path": ["status"], "values": ["active"] }
+      ]
+    }
+  ]
+}

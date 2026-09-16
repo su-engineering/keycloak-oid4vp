@@ -198,7 +198,8 @@ public class DcqlQueryBuilder {
         }
 
         Map<String, Object> credential = (Map<String, Object>) rawCredential;
-        Map<String, Object> meta = ensureMetaConstraint(credential, format, credentialType);
+        Map<String, Object> meta =
+                credential.containsKey("meta") ? null : ensureMetaConstraint(credential, format, credentialType);
         if (meta != null && FORMAT_SD_JWT_VC.equals(format) && !meta.containsKey(DCQL_VCT_VALUES)) {
             meta.put(DCQL_VCT_VALUES, List.of(credentialType));
         } else if (meta != null && FORMAT_MSO_MDOC.equals(format) && !meta.containsKey(DCQL_DOCTYPE_VALUE)) {

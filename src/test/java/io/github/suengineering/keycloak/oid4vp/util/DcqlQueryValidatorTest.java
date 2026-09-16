@@ -119,6 +119,21 @@ class DcqlQueryValidatorTest {
     }
 
     @Test
+    void rejectsUnboundCredentialRequestsForLogin() {
+        assertThatThrownBy(() -> DcqlQueryValidator.validate("""
+                {"credentials":[{"id":"x","format":"dc+sd-jwt","require_cryptographic_holder_binding":false}]}
+                """))
+                .hasMessageContaining("not supported for wallet login");
+    }
+
+    @Test
+    void explicitEmptyMetadataIsNotReplacedWithQueryId() throws Exception {
+        String query = "{\"credentials\":[{\"id\":\"arbitrary_id\",\"format\":\"dc+sd-jwt\",\"meta\":{}}]}";
+        String normalized = DcqlQueryBuilder.normalizeManualQuery(MAPPER, query, null);
+        assertThat(MAPPER.readTree(normalized)).isEqualTo(MAPPER.readTree(query));
+    }
+
+    @Test
     void rejectsAmbiguousIdsAndBrokenSetReferences() {
         String credential = "{\"id\":\"x\",\"format\":\"dc+sd-jwt\"}";
         assertThatThrownBy(

@@ -144,7 +144,7 @@ public class Oid4vpClaimToUserSessionMapper extends AbstractIdentityProviderMapp
             return;
         }
 
-        Object claimValue = Oid4vpMapperUtils.getClaimValue(context, claimPath);
+        Object claimValue = Oid4vpMapperUtils.getClaimValue(context, claimPath, mapperModel);
         if (claimValue == null) {
             if (!isOptional) {
                 LOG.warnf("Required claim '%s' not found in credential", claimPath);
@@ -152,7 +152,18 @@ public class Oid4vpClaimToUserSessionMapper extends AbstractIdentityProviderMapp
             return;
         }
 
-        String stringValue = Oid4vpMapperUtils.toStringValue(claimValue, isMultivalued);
+        String stringValue;
+        if (isMultivalued && claimValue instanceof java.util.List<?>) {
+            try {
+                stringValue = org.keycloak.util.JsonSerialization.writeValueAsString(
+                        Oid4vpMapperUtils.toStringList(claimValue, true));
+            } catch (Exception e) {
+                throw new org.keycloak.broker.provider.IdentityBrokerException(
+                        "Failed to serialize multi-valued session note", e);
+            }
+        } else {
+            stringValue = Oid4vpMapperUtils.toStringValue(claimValue, isMultivalued);
+        }
         if (stringValue == null) return;
         context.setSessionNote(sessionNote, stringValue);
     }

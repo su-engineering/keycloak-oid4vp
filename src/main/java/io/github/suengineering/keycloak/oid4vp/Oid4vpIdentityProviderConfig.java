@@ -43,6 +43,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
         DcqlQueryValidator.validate(getDcqlQuery());
     }
 
+    public static final String IDENTITY_CREDENTIAL_ID = "identityCredentialId";
     public static final String DCQL_QUERY = "dcqlQuery";
     public static final String USER_MAPPING_CLAIM = "userMappingClaim";
     public static final String USER_MAPPING_CLAIM_MDOC = "userMappingClaimMdoc";
@@ -118,6 +119,14 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public void setDcqlQuery(String dcqlQuery) {
         getConfig().put(DCQL_QUERY, dcqlQuery);
+    }
+
+    public String getIdentityCredentialId() {
+        return getConfig().get(IDENTITY_CREDENTIAL_ID);
+    }
+
+    public void setIdentityCredentialId(String id) {
+        getConfig().put(IDENTITY_CREDENTIAL_ID, id);
     }
 
     public String getUserMappingClaim() {
