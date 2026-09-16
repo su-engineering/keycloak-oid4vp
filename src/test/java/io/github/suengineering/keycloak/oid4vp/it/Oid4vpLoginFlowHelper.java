@@ -104,7 +104,12 @@ class Oid4vpLoginFlowHelper {
     }
 
     WalletResponse submitToWallet(String walletUrl) {
+        return submitToWallet(walletUrl, () -> {});
+    }
+
+    WalletResponse submitToWallet(String walletUrl, Runnable beforeAttempt) {
         String presentationUri = convertToOpenid4vpUri(walletUrl);
+        beforeAttempt.run();
         var response = wallet.acceptPresentationRequest(presentationUri);
         if (isSessionExpiredResponse(response.rawBody())) {
             LOG.info("[Test] Wallet callback raced request-context visibility; retrying same presentation once");
@@ -113,6 +118,7 @@ class Oid4vpLoginFlowHelper {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            beforeAttempt.run();
             response = wallet.acceptPresentationRequest(presentationUri);
         }
         LOG.info("[Test] Wallet response: {}", response.rawBody());

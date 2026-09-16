@@ -194,13 +194,13 @@ class KeycloakOid4vpLoginE2eIT extends AbstractOid4vpE2eTest {
     void walletErrorAllowsRetry() throws Exception {
         callback().reset();
         flow.clearBrowserSession();
-        wallet().client().setNextError("access_denied", "User denied consent");
 
         try {
             flow.navigateToLoginPage();
             flow.clickOid4vpIdpButton();
             String walletUrl = flow.getSameDeviceWalletUrl();
-            Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
+            Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(
+                    walletUrl, () -> wallet().client().setNextError("access_denied", "User denied consent"));
 
             assertThat(walletResponse.rawBody()).contains("access_denied");
             if (walletResponse.redirectUri() != null) {
