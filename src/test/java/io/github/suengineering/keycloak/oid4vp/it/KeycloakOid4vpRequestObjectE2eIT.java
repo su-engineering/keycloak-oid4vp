@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class KeycloakOid4vpRequestObjectE2eIT extends AbstractOid4vpE2eTest {
-
-    private static final int DIRECT_POST_ATTEMPTS = 2;
-    private static final long DIRECT_POST_RETRY_DELAY_MS = 200L;
 
     @Test
     void requestObjectCanBeFetchedMultipleTimes() throws Exception {
@@ -169,38 +166,18 @@ class KeycloakOid4vpRequestObjectE2eIT extends AbstractOid4vpE2eTest {
         String endpointUri = requestUri.replaceFirst("/request-object/[^/?]+.*$", "");
         String formBody = "response=" + urlEncode(encryptedResponse);
 
-        HttpResponse<String> directPostResponse = postDirectPostWithRetry(httpClient, endpointUri, formBody);
+        HttpResponse<String> directPostResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(endpointUri))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
 
         assertThat(directPostResponse.statusCode()).isEqualTo(200);
         assertThat(directPostResponse.body())
                 .contains("access_denied")
                 .doesNotContain("redirect_uri")
                 .doesNotContain("Encrypted response expected");
-    }
-
-    private HttpResponse<String> postDirectPostWithRetry(HttpClient httpClient, String endpointUri, String formBody)
-            throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(endpointUri))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                .build();
-
-        HttpResponse<String> response = null;
-        for (int attempt = 1; attempt <= DIRECT_POST_ATTEMPTS; attempt++) {
-            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (!isSessionExpiredResponse(response) || attempt == DIRECT_POST_ATTEMPTS) {
-                return response;
-            }
-            Thread.sleep(DIRECT_POST_RETRY_DELAY_MS);
-        }
-
-        return response;
-    }
-
-    private boolean isSessionExpiredResponse(HttpResponse<String> response) {
-        return response.statusCode() == 400
-                && response.body() != null
-                && response.body().contains("\"error\":\"session_expired\"");
     }
 }

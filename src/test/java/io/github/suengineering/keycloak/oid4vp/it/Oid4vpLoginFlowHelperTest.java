@@ -34,20 +34,18 @@ class Oid4vpLoginFlowHelperTest {
     private final Oid4vpLoginFlowHelper flow = new Oid4vpLoginFlowHelper(null, null, wallet, null, null, null);
 
     @Test
-    void reconfiguresOneShotWalletErrorBeforeRetryingExpiredSession() {
+    void doesNotRetryExpiredSession() {
         PresentationResponse expiredSession = mock(PresentationResponse.class);
-        when(expiredSession.rawBody()).thenReturn("""
-                        {"response":{"status_code":400,"body":"{\\"error\\":\\"session_expired\\"}"}}
-                        """);
-        PresentationResponse denial = denial();
-        when(wallet.acceptPresentationRequest(WALLET_URL)).thenReturn(expiredSession, denial);
+        String expiredBody = """
+                {"response":{"status_code":400,"body":"{\\"error\\":\\"session_expired\\"}"}}
+                """;
+        when(expiredSession.rawBody()).thenReturn(expiredBody);
+        when(wallet.acceptPresentationRequest(WALLET_URL)).thenReturn(expiredSession);
 
         var response = flow.submitToWallet(WALLET_URL, configureDenial);
 
-        assertThat(response.rawBody()).isEqualTo(DENIAL_BODY);
+        assertThat(response.rawBody()).isEqualTo(expiredBody);
         var order = inOrder(configureDenial, wallet);
-        order.verify(configureDenial).run();
-        order.verify(wallet).acceptPresentationRequest(WALLET_URL);
         order.verify(configureDenial).run();
         order.verify(wallet).acceptPresentationRequest(WALLET_URL);
         order.verifyNoMoreInteractions();

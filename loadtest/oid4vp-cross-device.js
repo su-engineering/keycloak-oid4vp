@@ -121,10 +121,7 @@ export async function loginFlow() {
 
 async function acceptPresentationRequest(page, walletUrl) {
     await waitForDelay(page, WALLET_APPROVAL_DELAY_MS);
-    let response = walletPost('/api/presentations', { uri: walletUrl });
-    if (isSessionExpiredResponse(response.body)) {
-        response = walletPost('/api/presentations', { uri: walletUrl });
-    }
+    const response = walletPost('/api/presentations', { uri: walletUrl });
     if (response.status !== 200) {
         throw new Error(`Wallet presentation request failed: ${response.status} ${response.body}`);
     }
@@ -333,23 +330,6 @@ function request(url, method, body, headers, expectJson) {
         }
     }
     return response;
-}
-
-function isSessionExpiredResponse(body) {
-    if (!body) {
-        return false;
-    }
-    try {
-        const parsed = JSON.parse(body);
-        const nested = parsed.response;
-        if (!nested || nested.status_code !== 400) {
-            return false;
-        }
-        const nestedBody = typeof nested.body === 'string' ? JSON.parse(nested.body) : nested.body;
-        return nestedBody && nestedBody.error === 'session_expired';
-    } catch (error) {
-        return false;
-    }
 }
 
 function encodeForm(values) {
