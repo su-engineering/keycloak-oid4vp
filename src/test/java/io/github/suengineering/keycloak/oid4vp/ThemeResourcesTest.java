@@ -77,6 +77,33 @@ class ThemeResourcesTest {
         }
     }
 
+    @Test
+    void openKycTemplatesLoadSelfHostedFonts() throws Exception {
+        for (String path : new String[] {
+            "/theme-resources/templates/oid4vp-template.ftl",
+            "/theme/openkyc/login/oid4vp-template.ftl",
+            "/theme/openkyc/login/template.ftl",
+            "/theme/openkyc/login/error.ftl",
+            "/theme/openkyc/login/resources/css/styles.css"
+        }) {
+            String resource = loadResource(path);
+            assertThat(resource).as(path).doesNotContain("fonts.googleapis.com", "fonts.gstatic.com");
+            assertThat(resource).as(path).contains("oid4vp-fonts.css");
+        }
+
+        String fontCss = loadResource("/theme-resources/resources/css/oid4vp-fonts.css");
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("url\\(\"\\.\\./(fonts/oid4vp/[^\"]+)\"\\)")
+                .matcher(fontCss);
+        int count = 0;
+        while (matcher.find()) {
+            assertThat(getClass().getResource("/theme-resources/resources/" + matcher.group(1)))
+                    .as(matcher.group(1))
+                    .isNotNull();
+            count++;
+        }
+        assertThat(count).isEqualTo(6);
+    }
+
     private String loadResource(String resourcePath) throws IOException {
         try (InputStream input = getClass().getResourceAsStream(resourcePath)) {
             assertThat(input).as("resource %s", resourcePath).isNotNull();

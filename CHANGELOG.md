@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Self-host the OpenKYC theme fonts (Inter, Plus Jakarta Sans, JetBrains Mono) so login pages make no requests to Google Fonts.
+
 ## 0.1.0-rc.1 — 2026-09-16
 
 Initial independent development baseline under su-engineering.

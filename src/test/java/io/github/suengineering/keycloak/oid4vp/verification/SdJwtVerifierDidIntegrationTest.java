@@ -1,5 +1,6 @@
 /*
- * Copyright 2026 Bundesagentur fuer Arbeit
+ * Copyright 2026 Bundesagentur für Arbeit
+ * Copyright 2026 su-engineering
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
