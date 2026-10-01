@@ -25,7 +25,7 @@ Start with [the local demo](quickstart.md), then [install the provider](installa
 
 - [Development](development.md) — toolchain, tests, coverage, and sandbox workflows.
 - [Conformance](conformance.md) — optional OIDF testing; no certification is claimed.
-- [Load testing](../loadtest/README.md) — clustered browser and SSE scenarios.
+- [Load testing](../loadtest/README.md) — clustered browser cross-device scenarios.
 - [Enterprise readiness](enterprise-readiness.md) — outstanding trust and operational work.
 - [Contributing](../CONTRIBUTING.md) · [Security policy](../SECURITY.md) · [Changelog](../CHANGELOG.md).
 

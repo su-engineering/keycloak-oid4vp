@@ -13,7 +13,7 @@ The `request_handle` is a unique, unguessable token generated once for each enab
 
 **Format:** Random UUID. Generated when the login page is rendered, before any wallet fetches the request object.
 
-**Lifecycle:** Generated during login page rendering → embedded in the `request_uri` path and, for cross-device, in the SSE status subscription → reused across multiple request-object fetches for the same browser flow → removed after the first successful callback consumes the flow.
+**Lifecycle:** Generated during login page rendering → embedded in the `request_uri` path and, for cross-device, in the status polling URL → reused across multiple request-object fetches for the same browser flow → removed after the first successful callback consumes the flow.
 
 **Security note:** The `request_handle` is not enough on its own to observe or finish the flow. Both `/cross-device/status` and `/complete-auth` use the stored `{rootSessionId, tabId}` from the single-use store to recover the original Keycloak authentication session and require the current browser request to be attached to that same auth session. In practice, security relies on both: a live one-time handle and the matching browser auth-session cookie.
 
@@ -44,13 +44,13 @@ This method:
 
 1. **Initializes login context** (`initializeLoginContext`) — computes `clientId` / `effectiveClientId`, chooses the auth-session tab ID used for flow binding, and captures the browser routing parameters needed to build the fallback form action
 2. **Builds redirect flow data** (`buildRedirectFlowData`) — creates a separate stable `requestHandle` for each enabled flow (same-device and cross-device), stores the per-flow context in `Oid4vpRequestObjectStore`, builds the corresponding `request_uri` URLs
-3. **Renders the login page** (`buildLoginFormResponse`) — passes wallet URLs, QR code, and SSE status URL to `login-oid4vp-idp.ftl`
+3. **Renders the login page** (`buildLoginFormResponse`) — passes wallet URLs, QR code, status URL, and poll interval to `login-oid4vp-idp.ftl`
 
 The login page contains:
 - Hidden state/request-handle fields used to keep the browser-side flow bound to the original Keycloak login attempt
 - A same-device deep link (`openid4vp://...?client_id=...&request_uri=...`)
 - A cross-device QR code encoding a similar URL (`openid4vp://...?client_id=...&request_uri=...`)
-- JavaScript that opens an SSE connection to `/cross-device/status?request_handle=...` using the cross-device flow's stable request handle when that flow is enabled
+- JavaScript that polls `/cross-device/status?request_handle=...` using the cross-device flow's stable request handle when that flow is enabled
 
 **Key detail:** The `request_uri` points to `/endpoint/request-object/{requestHandle}`. The request handle is stable for the browser flow, but each request-object fetch creates a fresh request context with its own `state`, `nonce`, and response-encryption key when the effective `response_mode` is `direct_post.jwt`. The request object JWT itself expires quickly (default 10 seconds) to limit fetch/replay windows, but once a wallet has fetched it, the later callback is accepted as long as the stored request context and authentication session still exist.
 
@@ -164,13 +164,13 @@ Both flows go through `Oid4vpDirectPostService.storeAndSignal`, which:
 2. Also stores claims JSON separately (`DEFERRED_CLAIMS_NOTE`) because Keycloak's serializer loses nested Map types
 3. Stores the deferred auth single-use object for both flows using the realm login timeout and, for cross-device only, stores a separate completion marker using `crossDeviceCompleteTtlSeconds`:
    - `oid4vp_deferred:{requestHandle}` → `{rootSessionId, tabId}` — used by `/complete-auth`
-   - `oid4vp_complete:{requestHandle}` → `{completeAuthUrl}` — read by SSE polling until `/complete-auth` removes it
+   - `oid4vp_complete:{requestHandle}` → `{completeAuthUrl}` — read by status polling until `/complete-auth` removes it
 4. Removes the stable `requestHandle` entry. That flow-handle entry is the authoritative liveness check for all later `state` / `kid` lookups, so any leftover request-specific entries are rejected and lazily removed on access, which invalidates every outstanding request context for that flow and blocks replay after the first successful callback
 
 The difference is in the response:
 
 - **Same-device:** Returns `{"redirect_uri": "/complete-auth?request_handle=..."}`. The wallet opens this URL in the browser, which triggers `completeAuth`.
-- **Cross-device:** Returns `200 OK` with `{}` body. The browser's SSE connection picks up the completion signal and navigates to `/complete-auth`.
+- **Cross-device:** Returns `200 OK` with `{}` body. The browser's next status poll picks up the completion signal and navigates to `/complete-auth`.
 
 ### Completion: `/complete-auth`
 
@@ -191,22 +191,23 @@ Oid4vpIdentityProviderEndpoint.completeAuth(requestHandle)
 6. Restores claims from `DEFERRED_CLAIMS_NOTE`
 7. Calls `callback.authenticated(context)` — Keycloak completes the login
 
-### Cross-Device: SSE Browser Notification
+### Cross-Device: Browser Status Polling
 
-Meanwhile, the browser has an open SSE connection:
+Meanwhile, the login page polls for the result:
 
 ```
+GET /cross-device/status?request_handle=...
 Oid4vpIdentityProviderEndpoint.crossDeviceStatus(requestHandle)
-    → Oid4vpCrossDeviceSseService.subscribe(requestHandle, eventSink, sse)
+    → Oid4vpDirectPostService.resolveCrossDeviceCompleteAuthUrl(requestHandle)
 ```
 
-Before accepting the subscription, the endpoint resolves the auth session for the `requestHandle` and requires the current browser auth-session cookie to match it. The SSE service then polls `singleUseObjects` for `oid4vp_complete:{requestHandle}`. When found:
-- Sends `event: complete` with `{"redirect_uri": "/complete-auth?request_handle=..."}` to the browser
-- Leaves the completion marker in place so a reconnecting SSE client can observe the same completion event until `/complete-auth` consumes it
+Each poll resolves the auth session for the `requestHandle` and requires the current browser auth-session cookie to match it; otherwise it returns `204 No Content` and the page stops polling. When they match, it reads `oid4vp_complete:{requestHandle}` from `singleUseObjects`:
+- Not present: `{"status": "pending"}`
+- Present: `{"status": "complete", "redirect_uri": "/complete-auth?request_handle=..."}`, leaving the marker in place until `/complete-auth` consumes it
 
-The browser JavaScript receives this and navigates to `/complete-auth?request_handle=...`, triggering the completion flow above.
+The page navigates to `redirect_uri`, triggering the completion flow above. Responses carry `Cache-Control: no-store`.
 
-The SSE implementation is node-local but state-shared: each browser SSE connection runs on its own virtual thread and polls Keycloak's shared single-use object store until the flow completes, expires, or times out. No cluster notification channel is required, but the single-use store itself must be shared across nodes so reconnects can resume on any node.
+Each poll is an ordinary request that finishes within its own Keycloak session and transaction. No connection, thread, or Keycloak session is held open between polls, and any node with access to the shared single-use store can answer.
 
 ## Error Handling
 
@@ -220,7 +221,7 @@ Errors can occur at multiple points:
 | Class | Role |
 |-------|------|
 | `Oid4vpIdentityProvider` | Login page rendering, session state init, DCQL query building |
-| `Oid4vpIdentityProviderEndpoint` | Thin JAX-RS adapter for request-object, direct_post, SSE, and complete-auth routes |
+| `Oid4vpIdentityProviderEndpoint` | Thin JAX-RS adapter for request-object, direct_post, cross-device status, and complete-auth routes |
 | `Oid4vpRequestObjectService` | Request-object creation, wallet-metadata encryption, and request-context persistence |
 | `Oid4vpEndpointResponseFactory` | JSON error payloads and wallet redirect responses |
 | `Oid4vpRedirectFlowService` | Request claim assembly, client_metadata/encryption key generation, wallet authorization URL creation |
@@ -236,7 +237,6 @@ Errors can occur at multiple points:
 | `TrustListProvider` | ETSI trust list fetching, certificate extraction, caching, optional JWT signature verification |
 | `X5cChainValidator` | x5c certificate chain validation (shared by SD-JWT, mDoc, status list, trust list) |
 | `Oid4vpDirectPostService` | Deferred auth storage for both flows, session restoration at `/complete-auth` |
-| `Oid4vpCrossDeviceSseService` | Node-local SSE subscription handling for cross-device completion |
 | `Oid4vpRequestObjectStore` | Transient storage for stable flow handles, per-request contexts, state→request mappings, and KID→state mappings. Flow-handle removal invalidates all sibling request contexts without needing explicit per-flow state tracking |
 | `Oid4vpAuthSessionResolver` | Auth session lookup from request object store (state→handle→session, rootSessionId→tabId) |
 | `Oid4vpResponseDecryptor` | JWE decryption for direct_post.jwt responses |

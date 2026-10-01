@@ -59,7 +59,7 @@ Source: [`src/main/resources/theme/su-engineering/login/`](../src/main/resources
 | File | Responsibility |
 | --- | --- |
 | `theme.properties` | Inherits `keycloak`, loads the parent login CSS followed by neutral overrides |
-| `login-oid4vp-idp.ftl` | Wallet actions, QR, hidden form fields, alternative providers, and SSE configuration |
+| `login-oid4vp-idp.ftl` | Wallet actions, QR, hidden form fields, alternative providers, and cross-device status configuration |
 | `oid4vp-template.ftl` | Dedicated wallet page layout; intentionally omits Keycloak's generic auth checker |
 | `footer.ftl` | Branding on inherited forms |
 | `resources/css/su-engineering.css` | Palette, spacing, type, responsive layout, and form overrides |
@@ -68,7 +68,7 @@ Source: [`src/main/resources/theme/su-engineering/login/`](../src/main/resources
 
 The palette and type variables are declared at the start of the stylesheet. For an organization-specific variant, create a child theme with `parent=su-engineering` and override only the files you need. Keycloak's theme documentation is in the [server development guide](https://www.keycloak.org/docs/latest/server_development/#_themes); verify template compatibility against your pinned runtime.
 
-Preserve `oid4vpForm`, its hidden fields, `oid4vp-open-wallet`, `oid4vp-qr-code`, the wallet URLs, and the `oid4vp-cross-device-sse-config` data attributes. The completion script comes from the shared extension theme resources; do not replace it with a general login-session polling script.
+Preserve `oid4vpForm`, its hidden fields, `oid4vp-open-wallet`, `oid4vp-qr-code`, the wallet URLs, and the `oid4vp-cross-device-status-config` data attributes. The completion script comes from the shared extension theme resources; do not replace it with a general login-session polling script.
 
 ## Preview changes and refresh screenshots
 

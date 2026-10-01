@@ -147,7 +147,7 @@ class KeycloakThemeE2eIT extends AbstractOid4vpE2eTest {
         navigateDirectlyToWallet();
         flow.getSameDeviceWalletUrl();
         assertThat(page.locator("#oid4vp-qr-code").count()).isZero();
-        assertThat(page.locator("#oid4vp-cross-device-sse-config").count()).isZero();
+        assertThat(page.locator("#oid4vp-cross-device-status-config").count()).isZero();
         page.getByText("Start again", new com.microsoft.playwright.Page.GetByTextOptions().setExact(true))
                 .click();
         page.waitForSelector("#oid4vp-open-wallet");

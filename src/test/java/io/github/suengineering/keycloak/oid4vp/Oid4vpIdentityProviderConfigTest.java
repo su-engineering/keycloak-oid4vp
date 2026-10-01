@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,24 +174,36 @@ class Oid4vpIdentityProviderConfigTest {
     }
 
     @Test
-    void sseDefaults() {
-        assertThat(config.getSsePollIntervalMs()).isEqualTo(2000);
-        assertThat(config.getSseTimeoutSeconds()).isEqualTo(120);
-        assertThat(config.getSsePingIntervalSeconds()).isEqualTo(10);
+    void crossDeviceDefaults() {
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(2000);
         assertThat(config.getCrossDeviceCompleteTtlSeconds()).isEqualTo(300);
     }
 
     @Test
-    void sseCustomValues() {
-        config.setSsePollIntervalMs(500);
-        config.setSseTimeoutSeconds(60);
-        config.setSsePingIntervalSeconds(5);
+    void crossDeviceCustomValues() {
+        config.setCrossDevicePollIntervalMs(750);
         config.setCrossDeviceCompleteTtlSeconds(600);
 
-        assertThat(config.getSsePollIntervalMs()).isEqualTo(500);
-        assertThat(config.getSseTimeoutSeconds()).isEqualTo(60);
-        assertThat(config.getSsePingIntervalSeconds()).isEqualTo(5);
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(750);
         assertThat(config.getCrossDeviceCompleteTtlSeconds()).isEqualTo(600);
+    }
+
+    @Test
+    void crossDevicePollInterval_fallsBackToLegacySseKey() {
+        config.getConfig().put("ssePollIntervalMs", "1500");
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(1500);
+
+        config.setCrossDevicePollIntervalMs(900);
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(900);
+    }
+
+    @Test
+    void crossDevicePollInterval_isClamped() {
+        config.setCrossDevicePollIntervalMs(10);
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(500);
+
+        config.setCrossDevicePollIntervalMs(600_000);
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(30_000);
     }
 
     @Test
@@ -291,11 +303,9 @@ class Oid4vpIdentityProviderConfigTest {
     }
 
     @Test
-    void sseInvalidIntFallsBackToDefault() {
-        config.getConfig().put("ssePollIntervalMs", "not-a-number");
-        config.getConfig().put("sseTimeoutSeconds", "");
+    void crossDevicePollIntervalInvalidIntFallsBackToDefault() {
+        config.getConfig().put("crossDevicePollIntervalMs", "not-a-number");
 
-        assertThat(config.getSsePollIntervalMs()).isEqualTo(2000);
-        assertThat(config.getSseTimeoutSeconds()).isEqualTo(120);
+        assertThat(config.getCrossDevicePollIntervalMs()).isEqualTo(2000);
     }
 }

@@ -23,7 +23,7 @@ Use Conventional Commit messages, for example `fix: validate issuer key selectio
 
 Provider IDs, mapper IDs, realm config keys, endpoint paths, stored flow state, and the installed JAR filename are integration contracts. Test matching Maven and container versions when upgrading the runtime. Keep issuer trust separate from verifier authentication. See [migration](docs/migration.md).
 
-Theme changes must preserve the wallet form fields, links, QR payload, and SSE configuration. Keep OpenKYC compatibility unless a dedicated change is agreed. The neutral theme's copy must remain independent of a particular credential issuer or wallet vendor.
+Theme changes must preserve the wallet form fields, links, QR payload, and cross-device status configuration. Keep OpenKYC compatibility unless a dedicated change is agreed. The neutral theme's copy must remain independent of a particular credential issuer or wallet vendor.
 
 ## Documentation and assets
 

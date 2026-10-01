@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import org.keycloak.utils.StringUtil;
  *
  * <p>Wraps the Keycloak {@link IdentityProviderModel} and provides typed accessors for all
  * OID4VP-specific settings: credential formats, client ID schemes, HAIP enforcement, trust list
- * URL, SSE polling parameters, and claim mappings. Implements {@link Oid4vpConfigProvider} for
+ * URL, cross-device polling, and claim mappings. Implements {@link Oid4vpConfigProvider} for
  * use by domain services without depending on the full Keycloak model.
  */
 public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implements Oid4vpConfigProvider {
@@ -84,18 +84,19 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String DID_CACHE_TTL_SECONDS = "didCacheTtlSeconds";
     public static final int DEFAULT_DID_CACHE_TTL_SECONDS = 3600;
 
-    public static final String SSE_POLL_INTERVAL_MS = "ssePollIntervalMs";
-    public static final String SSE_TIMEOUT_SECONDS = "sseTimeoutSeconds";
-    public static final String SSE_PING_INTERVAL_SECONDS = "ssePingIntervalSeconds";
+    public static final String CROSS_DEVICE_POLL_INTERVAL_MS = "crossDevicePollIntervalMs";
+    /** Pre-0.1.0 key, read only when {@link #CROSS_DEVICE_POLL_INTERVAL_MS} is unset. */
+    public static final String LEGACY_SSE_POLL_INTERVAL_MS = "ssePollIntervalMs";
+
     public static final String CROSS_DEVICE_COMPLETE_TTL_SECONDS = "crossDeviceCompleteTtlSeconds";
 
     public static final String CLOCK_SKEW_SECONDS = "clockSkewSeconds";
     public static final String KB_JWT_MAX_AGE_SECONDS = "kbJwtMaxAgeSeconds";
     public static final String REQUEST_OBJECT_LIFESPAN_SECONDS = "requestObjectLifespanSeconds";
 
-    public static final int DEFAULT_SSE_POLL_INTERVAL_MS = 2000;
-    public static final int DEFAULT_SSE_TIMEOUT_SECONDS = 120;
-    public static final int DEFAULT_SSE_PING_INTERVAL_SECONDS = 10;
+    public static final int DEFAULT_CROSS_DEVICE_POLL_INTERVAL_MS = 2000;
+    public static final int MIN_CROSS_DEVICE_POLL_INTERVAL_MS = 500;
+    public static final int MAX_CROSS_DEVICE_POLL_INTERVAL_MS = 30000;
     public static final int DEFAULT_CROSS_DEVICE_COMPLETE_TTL_SECONDS = 300;
     public static final int DEFAULT_CLOCK_SKEW_SECONDS = 60;
     public static final int DEFAULT_KB_JWT_MAX_AGE_SECONDS = 300;
@@ -390,28 +391,17 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
         }
     }
 
-    public int getSsePollIntervalMs() {
-        return getIntConfig(SSE_POLL_INTERVAL_MS, DEFAULT_SSE_POLL_INTERVAL_MS);
+    /** Interval at which the cross-device login page polls for wallet completion, clamped to a safe range. */
+    public int getCrossDevicePollIntervalMs() {
+        String key = StringUtil.isBlank(getConfig().get(CROSS_DEVICE_POLL_INTERVAL_MS))
+                ? LEGACY_SSE_POLL_INTERVAL_MS
+                : CROSS_DEVICE_POLL_INTERVAL_MS;
+        int value = getIntConfig(key, DEFAULT_CROSS_DEVICE_POLL_INTERVAL_MS);
+        return Math.clamp(value, MIN_CROSS_DEVICE_POLL_INTERVAL_MS, MAX_CROSS_DEVICE_POLL_INTERVAL_MS);
     }
 
-    public void setSsePollIntervalMs(int ms) {
-        getConfig().put(SSE_POLL_INTERVAL_MS, String.valueOf(ms));
-    }
-
-    public int getSseTimeoutSeconds() {
-        return getIntConfig(SSE_TIMEOUT_SECONDS, DEFAULT_SSE_TIMEOUT_SECONDS);
-    }
-
-    public void setSseTimeoutSeconds(int seconds) {
-        getConfig().put(SSE_TIMEOUT_SECONDS, String.valueOf(seconds));
-    }
-
-    public int getSsePingIntervalSeconds() {
-        return getIntConfig(SSE_PING_INTERVAL_SECONDS, DEFAULT_SSE_PING_INTERVAL_SECONDS);
-    }
-
-    public void setSsePingIntervalSeconds(int seconds) {
-        getConfig().put(SSE_PING_INTERVAL_SECONDS, String.valueOf(seconds));
+    public void setCrossDevicePollIntervalMs(int ms) {
+        getConfig().put(CROSS_DEVICE_POLL_INTERVAL_MS, String.valueOf(ms));
     }
 
     public int getCrossDeviceCompleteTtlSeconds() {

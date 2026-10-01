@@ -38,7 +38,7 @@ Example realm import fragment:
 
 Before choosing defaults, establish the wallet's verifier-authentication requirements, accepted credential issuers and types, claim mapping, user persistence model, and status/revocation policy. A successful demo configuration is not a complete trust policy.
 
-The snippets in this document are fragments. Do not place private signing keys in tracked realm JSON. Configure credential requests, mappers, wallet flows, issuer policy, proof timing, and verifier material under **Identity providers → oid4vp** in the Admin Console. Advanced internal settings such as SSE timing remain available through realm JSON or the Admin REST API. Use the [generic realm and UI setup guide](installation.md#configure-a-realm) for a new deployment. Select the login theme in **Realm settings → Themes**; direct wallet entry is configured separately under **Authentication → Flows**. See [themes](themes.md).
+The snippets in this document are fragments. Do not place private signing keys in tracked realm JSON. Configure credential requests, mappers, wallet flows, issuer policy, proof timing, and verifier material under **Identity providers → oid4vp** in the Admin Console. Advanced internal settings such as the cross-device poll interval remain available through realm JSON or the Admin REST API. Use the [generic realm and UI setup guide](installation.md#configure-a-realm) for a new deployment. Select the login theme in **Realm settings → Themes**; direct wallet entry is configured separately under **Authentication → Flows**. See [themes](themes.md).
 
 ## Settings
 
@@ -142,13 +142,11 @@ Trust lists are cached until the earliest of ETSI `ListAndSchemeInformation.Next
 | `trustListMaxStaleAgeSeconds` | Maximum age of an expired trust-list cache entry that may be reused when refresh fails. Set `0` to disable stale fallback. | `86400` |
 | `issuerMetadataMaxCacheTtlSeconds` | Optional maximum cache TTL for JWT VC issuer metadata and resolved issuer JWKS. The effective lifetime is capped earlier by HTTP `Cache-Control` and any JWK `exp`. Set `0` to disable issuer-metadata caching. | `86400` |
 
-### Cross-Device SSE
+### Cross-Device Status Polling
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `ssePollIntervalMs` | How often each SSE connection polls shared completion state. | `2000` |
-| `sseTimeoutSeconds` | Maximum SSE connection lifetime before timeout. | `120` |
-| `ssePingIntervalSeconds` | Keep-alive ping interval. | `10` |
+| `crossDevicePollIntervalMs` | How often the cross-device login page asks Keycloak whether the wallet has finished. Clamped to 500–30000 ms. The pre-0.1.0 key `ssePollIntervalMs` is read when this key is unset. | `2000` |
 | `crossDeviceCompleteTtlSeconds` | Lifetime of the cross-device completion marker. The deferred auth record itself uses the realm login timeout. | `300` |
 
 ## IdP Mappers
@@ -162,7 +160,7 @@ Each mapper can select a DCQL query ID, credential format, credential type, and 
 
 ## Multi-Node Behavior
 
-Cross-device completion depends on a shared Keycloak `SingleUseObjectProvider`. Each node keeps only its local SSE connections; every open cross-device watcher polls the shared completion marker from a virtual thread on the node currently serving that browser connection. No cluster notification channel is required, but the single-use object store itself must be shared.
+Cross-device completion depends on a shared Keycloak `SingleUseObjectProvider`. The login page polls `/cross-device/status` with short, ordinary requests; any node can answer because each poll reads the shared completion marker and holds no connection or thread open between polls. No cluster notification channel or sticky session is required, but the single-use object store and authentication sessions must be shared.
 
 ## did:web issuer verification
 

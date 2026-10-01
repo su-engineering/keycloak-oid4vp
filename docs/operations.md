@@ -21,22 +21,22 @@ Treat provider aliases, mapper IDs, claim names, and issuer policy as applicatio
 | Signature or holder binding fails | Credential or transaction mismatch | Check the signing key, disclosure integrity, nonce, audience, and clock. Do not disable verification to suppress the error. |
 | User cannot be identified | Claim mapping | Confirm the requested identifying claim is disclosed, or use explicitly configured transient-user mode. |
 | Credential rejected as revoked | Status policy | Check the credential's status reference, the returned status token, trust configuration, and cache freshness. |
-| Wallet succeeds, browser keeps waiting | SSE/proxy/session | Check the status stream, completion event, browser cookies, and shared store. |
+| Wallet succeeds, browser keeps waiting | Polling/proxy/session | Check the `/cross-device/status` responses, browser cookies, and shared store. |
 | Session mismatch or expired request | Browser binding or timeout | Return in the initiating browser profile; start a fresh attempt after expiry. |
 
 ## Cross-device completion
 
-The browser subscribes to a server-sent event stream. The wallet's callback stores a completion marker in Keycloak's shared single-use object store. An SSE worker polls the store and sends a `complete` event with the return URL.
+The login page polls `/cross-device/status` every `crossDevicePollIntervalMs`. The wallet's callback stores a completion marker in Keycloak's shared single-use object store; the next poll returns `{"status":"complete","redirect_uri":...}` and the page navigates there. A `204` response means the flow is unknown, expired, or belongs to another browser, and the page stops polling.
 
 Check each boundary in order:
 
 1. **Wallet callback:** did Keycloak accept the presentation? A QR scan or a wallet's local success message alone is insufficient.
 2. **Shared state:** can all relevant Keycloak nodes read the same single-use objects and authentication session?
-3. **Proxy:** does it pass streaming responses promptly, preserve cookies and the external scheme/host, and allow the configured connection lifetime?
-4. **Browser:** did the SSE connection open and receive a `complete` event? Did navigation retain the initiating authentication session?
+3. **Proxy:** does it preserve cookies and the external scheme/host, and avoid caching `/cross-device/status` (responses carry `Cache-Control: no-store`)?
+4. **Browser:** do the status polls return `pending` and then `complete`, or `204`? Did navigation retain the initiating authentication session?
 5. **Completion:** did `/complete-auth` consume the deferred identity and continue the broker flow?
 
-Do not expose an unauthenticated completion endpoint or bypass the session-cookie check to repair a proxy issue. The [protocol diagram](diagrams.md#login-and-completion) shows the normal flow; [configuration](configuration.md#cross-device-sse) lists timeout and polling settings.
+Do not expose an unauthenticated completion endpoint or bypass the session-cookie check to repair a proxy issue. The [protocol diagram](diagrams.md#login-and-completion) shows the normal flow; [configuration](configuration.md#cross-device-status-polling) lists the polling setting.
 
 ## Logs and support reports
 

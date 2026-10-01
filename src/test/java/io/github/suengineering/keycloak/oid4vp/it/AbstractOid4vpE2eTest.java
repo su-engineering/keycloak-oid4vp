@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.ECDHEncrypter;
 import com.nimbusds.jose.jwk.ECKey;
 import io.github.dominikschlosser.oid4vc.Oid4vcContainer;
-import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -147,7 +146,8 @@ abstract class AbstractOid4vpE2eTest {
         } catch (Exception e) {
             String requestHandle = flow.getRequestHandle();
             if (requestHandle == null || requestHandle.isBlank()) {
-                throw new AssertionError("Cross-device: SSE did not navigate browser. URL: " + page.url(), e);
+                throw new AssertionError(
+                        "Cross-device: status polling did not navigate browser. URL: " + page.url(), e);
             }
             String completeAuthUrl = env.keycloakHostUrl() + "/realms/" + Oid4vpE2eEnvironment.REALM
                     + "/broker/oid4vp/endpoint/complete-auth?request_handle="
@@ -244,22 +244,6 @@ abstract class AbstractOid4vpE2eTest {
                 || bodyText.contains("revoked")
                 || bodyText.contains("failed")
                 || bodyText.contains("denied");
-    }
-
-    protected String extractRedirectUriFromSseResponse(String sseBody) throws IOException {
-        for (String rawLine : sseBody.split("\\R")) {
-            String line = rawLine.stripLeading();
-            if (line.startsWith("data:")) {
-                String payloadJson = line.length() > 5 && line.charAt(5) == ' ' ? line.substring(6) : line.substring(5);
-                @SuppressWarnings("unchecked")
-                Map<String, Object> payload = env.objectMapper().readValue(payloadJson, Map.class);
-                Object redirectUri = payload.get("redirect_uri");
-                if (redirectUri != null) {
-                    return String.valueOf(redirectUri);
-                }
-            }
-        }
-        throw new IllegalArgumentException("No redirect_uri found in SSE response: " + sseBody);
     }
 
     protected String browserCookieHeader(String url) {

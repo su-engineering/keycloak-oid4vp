@@ -22,7 +22,7 @@ The `did:webvh` path validates signed history, required witnesses, current asser
 - **Version policy:** select supported Keycloak/Java versions and test exact images. Upgrade runtime libraries separately from this cleanup.
 - **Health checks:** the Coolify probe uses `curl` and `|| exit 0`, so it can report success without a healthy server. Replace it after validating the container's management endpoint.
 - **Secrets and initialization:** the generic realm now omits application clients and verifier material, and starts with a disabled IdP. The image imports one selected realm file. Review the preserved OpenKYC example and remaining Compose credential defaults before deployment, and define verifier-key rotation and storage policy.
-- **Clustering:** test replay races, node loss, cache invalidation, SSE reconnects, and rolling changes against the shared state store.
+- **Clustering:** test replay races, node loss, cache invalidation, status polling across node changes, and rolling changes against the shared state store.
 - **Observability:** structured errors, latency and resolution metrics, readiness, and logs without credential claims, presentations, or private material.
 - **Resource limits:** test malformed and oversized presentations, DCQL complexity, request concurrency, and slow issuer endpoints.
 

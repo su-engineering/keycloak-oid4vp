@@ -22,7 +22,7 @@ This creates a disposable Keycloak instance with the `su-engineering` theme and 
 | `src/test/resources/` | Synthetic realm and credential fixtures |
 | `scripts/` | Demo and existing sandbox helpers |
 | `deployment/` | Existing Coolify image and Compose configuration |
-| `loadtest/` | Clustered browser/SSE load test |
+| `loadtest/` | Clustered browser cross-device load test |
 | `docs/` | User, operator, and contributor documentation |
 
 ## Running tests
@@ -133,7 +133,7 @@ The generated realm is ignored by Git. The root Compose file mounts that generat
 
 ## Conformance and load testing
 
-Live OIDF conformance requires the explicit `conformance` profile, credentials, and a reachable HTTPS verifier. See [conformance](conformance.md). The clustered browser/SSE workload is documented in [load testing](../loadtest/README.md).
+Live OIDF conformance requires the explicit `conformance` profile, credentials, and a reachable HTTPS verifier. See [conformance](conformance.md). The clustered browser cross-device workload is documented in [load testing](../loadtest/README.md).
 
 ## WebVH dependency and packaging checks
 

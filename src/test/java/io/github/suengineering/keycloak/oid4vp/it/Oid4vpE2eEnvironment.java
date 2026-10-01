@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,18 +85,6 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
             Path.of("target/jacoco-container").toAbsolutePath();
     private static final String JACOCO_CONTAINER_FILE = "/coverage/keycloak.exec";
     private static final Duration KEYCLOAK_STARTUP_TIMEOUT = Duration.ofSeconds(180);
-    private static final String SSE_INIT_SCRIPT = """
-            const OrigES = window.EventSource;
-            window.EventSource = function(url) {
-                window.__oid4vpStatusUrl = url;
-                const es = new OrigES(url);
-                es.addEventListener('ping', () => { window.__oid4vpSseReady = true; });
-                return es;
-            };
-            window.EventSource.prototype = OrigES.prototype;
-            window.__oid4vpSseReady = false;
-            window.__oid4vpStatusUrl = null;
-            """;
 
     private static Oid4vpE2eEnvironment instance;
     private static boolean shutdownHookRegistered;
@@ -222,7 +210,6 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
 
     BrowserContext newBrowserContext() {
         BrowserContext context = browser.newContext();
-        context.addInitScript(SSE_INIT_SCRIPT);
         return context;
     }
 

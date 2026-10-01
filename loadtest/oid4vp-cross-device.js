@@ -45,7 +45,7 @@ const SD_JWT_ONLY_DCQL = JSON.stringify({
 export const options = {
     insecureSkipTLSVerify: INSECURE_TLS,
     scenarios: {
-        browser_sse: {
+        browser_cross_device: {
             executor: 'constant-arrival-rate',
             exec: 'loginFlow',
             rate: RATE_PER_SECOND,

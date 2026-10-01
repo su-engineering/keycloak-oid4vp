@@ -5,18 +5,18 @@ This directory contains a k6 browser loadtest setup for the OID4VP cross-device 
 The loadtest uses:
 
 - a real Chromium page for the Keycloak login browser path
-- the page's own `EventSource` handling for cross-device completion
+- the page's own status polling for cross-device completion
 - the local `oid4vc-dev` wallet mock to submit the presentation
 - a two-node Keycloak cluster with shared database and shared cache discovery
 
 ## Scope
 
-The goal is to exercise the real browser-side SSE flow under load, not just the raw HTTP endpoints.
+The goal is to exercise the real browser-side cross-device flow under load, not just the raw HTTP endpoints.
 
 What it covers:
 
 - real OID4VP login pages
-- real browser-side SSE handling on `/cross-device/status`
+- real browser-side status polling of `/cross-device/status`
 - real wallet request-object fetch and `direct_post` callback
 - clustered Keycloak nodes behind HAProxy
 - transient-user logins, so repeated concurrent runs do not need persistent brokered users
@@ -116,7 +116,7 @@ During `setup()`, the k6 script updates the OID4VP IdP to keep the loadtest pred
 - reduces DCQL to one SD-JWT PID credential
 - points `trustListUrl` at the local `oid4vc-dev` wallet container
 
-That avoids first-login persistence races and keeps the measured path focused on the browser SSE flow.
+That avoids first-login persistence races and keeps the measured path focused on the browser cross-device flow.
 
 ## Important Environment Variables
 

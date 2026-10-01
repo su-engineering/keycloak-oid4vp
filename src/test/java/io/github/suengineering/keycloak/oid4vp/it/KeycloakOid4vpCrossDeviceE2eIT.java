@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package io.github.suengineering.keycloak.oid4vp.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.suengineering.keycloak.oid4vp.Oid4vpIdentityProviderConfig;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -46,7 +47,6 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getCrossDeviceWalletUrl();
         LOG.info("[Test] Cross-device wallet URL: {}", walletUrl);
 
-        flow.waitForSseConnection();
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
         LOG.info("[Test] Cross-device wallet response: {}", walletResponse.rawBody());
 
@@ -66,7 +66,6 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         flow.clickOid4vpIdpButton();
         String walletUrl = flow.getCrossDeviceWalletUrl();
 
-        flow.waitForSseConnection();
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
         assertThat(walletResponse.redirectUri()).isNull();
 
@@ -106,7 +105,6 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getCrossDeviceWalletUrl();
         LOG.info("[Test] Cross-device mDoc wallet URL: {}", walletUrl);
 
-        flow.waitForSseConnection();
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
         assertThat(walletResponse.redirectUri()).isNull();
 
@@ -146,7 +144,6 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         assertThat(prefetch1.statusCode()).isEqualTo(200);
         assertThat(prefetch2.statusCode()).isEqualTo(200);
 
-        flow.waitForSseConnection();
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(crossDeviceWalletUrl);
         assertThat(walletResponse.redirectUri()).isNull();
 
@@ -156,7 +153,7 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
     }
 
     @Test
-    void crossDeviceCompletionCanBeObservedBySecondSseClientWithSameBrowserSession() throws Exception {
+    void crossDeviceCompletionCanBeObservedByStatusPollWithSameBrowserSession() throws Exception {
         callback().reset();
         flow.clearBrowserSession();
         idpConfig.set(Oid4vpIdentityProviderConfig.CROSS_DEVICE_ENABLED, "true").apply();
@@ -168,31 +165,33 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getCrossDeviceWalletUrl();
         String requestHandle = flow.getRequestHandle();
 
-        flow.waitForSseConnection();
         page.navigate("about:blank");
 
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
         assertThat(walletResponse.redirectUri()).isNull();
-        String sseStatusUrl = env.keycloakHostUrl() + "/realms/" + Oid4vpE2eEnvironment.REALM
+        String statusUrl = env.keycloakHostUrl() + "/realms/" + Oid4vpE2eEnvironment.REALM
                 + "/broker/oid4vp/endpoint/cross-device/status?request_handle="
                 + URLEncoder.encode(requestHandle, StandardCharsets.UTF_8);
-        String cookieHeader = browserCookieHeader(sseStatusUrl);
-        HttpResponse<String> sseResponse = HttpClient.newHttpClient()
+        String cookieHeader = browserCookieHeader(statusUrl);
+        HttpResponse<String> statusResponse = HttpClient.newHttpClient()
                 .send(
                         HttpRequest.newBuilder()
-                                .uri(URI.create(sseStatusUrl))
+                                .uri(URI.create(statusUrl))
                                 .header("Cookie", cookieHeader)
                                 .GET()
                                 .build(),
                         HttpResponse.BodyHandlers.ofString());
 
-        assertThat(sseResponse.statusCode()).isEqualTo(200);
-        assertThat(sseResponse.body()).contains("event:complete");
-        String redirectUri = extractRedirectUriFromSseResponse(sseResponse.body());
+        assertThat(statusResponse.statusCode()).isEqualTo(200);
+        assertThat(statusResponse.headers().firstValue("Cache-Control"))
+                .hasValueSatisfying(value -> assertThat(value).contains("no-store"));
+        JsonNode status = env.objectMapper().readTree(statusResponse.body());
+        assertThat(status.path("status").asText()).isEqualTo("complete");
+        String redirectUri = status.path("redirect_uri").asText();
         assertThat(redirectUri).contains("complete-auth");
 
         page.navigate(redirectUri);
-        flow.completeFirstBrokerLoginIfNeeded("cross-device-second-sse-user");
+        flow.completeFirstBrokerLoginIfNeeded("cross-device-status-poll-user");
         flow.assertLoginSucceeded();
     }
 
@@ -209,24 +208,24 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getCrossDeviceWalletUrl();
         String requestHandle = flow.getRequestHandle();
 
-        flow.waitForSseConnection();
         page.navigate("about:blank");
 
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
         assertThat(walletResponse.redirectUri()).isNull();
 
-        String sseStatusUrl = env.keycloakHostUrl() + "/realms/" + Oid4vpE2eEnvironment.REALM
+        String statusUrl = env.keycloakHostUrl() + "/realms/" + Oid4vpE2eEnvironment.REALM
                 + "/broker/oid4vp/endpoint/cross-device/status?request_handle="
                 + URLEncoder.encode(requestHandle, StandardCharsets.UTF_8);
-        HttpResponse<String> sseResponse = HttpClient.newHttpClient()
+        HttpResponse<String> statusResponse = HttpClient.newHttpClient()
                 .send(
                         HttpRequest.newBuilder()
-                                .uri(URI.create(sseStatusUrl))
+                                .uri(URI.create(statusUrl))
                                 .GET()
                                 .build(),
                         HttpResponse.BodyHandlers.ofString());
 
-        assertThat(sseResponse.statusCode()).isEqualTo(204);
+        assertThat(statusResponse.statusCode()).isEqualTo(204);
+        assertThat(statusResponse.body()).isEmpty();
     }
 
     @Test
@@ -242,7 +241,6 @@ class KeycloakOid4vpCrossDeviceE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getCrossDeviceWalletUrl();
         String requestHandle = flow.getRequestHandle();
 
-        flow.waitForSseConnection();
         Oid4vpLoginFlowHelper.WalletResponse walletResponse = flow.submitToWallet(walletUrl);
         assertThat(walletResponse.redirectUri()).isNull();
 

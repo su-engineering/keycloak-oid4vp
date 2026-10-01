@@ -104,6 +104,24 @@ class ThemeResourcesTest {
         assertThat(count).isEqualTo(6);
     }
 
+    @Test
+    void loginTemplatesPollCrossDeviceStatusWithoutServerSentEvents() throws Exception {
+        for (String path : new String[] {
+            "/theme-resources/templates/login-oid4vp-idp.ftl",
+            "/theme/openkyc/login/login-oid4vp-idp.ftl",
+            "/theme/su-engineering/login/login-oid4vp-idp.ftl"
+        }) {
+            String template = loadResource(path);
+            assertThat(template).as(path).contains("oid4vp-cross-device-status.js", "data-poll-interval-ms");
+            assertThat(template).as(path).doesNotContain("oid4vp-cross-device-sse");
+        }
+
+        String script = loadResource("/theme-resources/resources/js/oid4vp-cross-device-status.js");
+        assertThat(script).contains("fetch(").doesNotContain("EventSource");
+        assertThat(getClass().getResource("/theme/openkyc/login/resources/js/oid4vp-cross-device-sse.js"))
+                .isNull();
+    }
+
     private String loadResource(String resourcePath) throws IOException {
         try (InputStream input = getClass().getResourceAsStream(resourcePath)) {
             assertThat(input).as("resource %s", resourcePath).isNotNull();

@@ -20,7 +20,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | **did:webvh issuer verification** | Opt-in WebVH v1.0 history and witness validation, current assertion keys, and strict key-ID selection. [Setup and limits](docs/did-webvh.md). |
 | **Certificate-based verification** | X.509 issuer verification and ETSI trust-list integration; issuer-metadata fallback outside strict X.509 mode. |
 | **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
-| **Wallet interaction** | Same-device links and cross-device QR codes, with server-sent events to resume browser login. |
+| **Wallet interaction** | Same-device links and cross-device QR codes, with status polling to resume browser login. |
 | **Presentation requests** | Multiple credentials per login, DCQL required/alternative sets and verified claim conditions; `direct_post` and encrypted `direct_post.jwt` responses. |
 | **Keycloak integration** | Claim-to-user-attribute and claim-to-session-note mappers; optional transient users. |
 | **Login themes** | Neutral `su-engineering` and OpenKYC `openkyc`; select per realm. |

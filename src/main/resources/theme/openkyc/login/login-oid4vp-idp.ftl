@@ -144,12 +144,13 @@
 
         <#if (crossDeviceStatusUrl!'')?has_content && (crossDeviceEnabled!false)>
             <div
-                id="oid4vp-cross-device-sse-config"
+                id="oid4vp-cross-device-status-config"
                 data-status-url="${crossDeviceStatusUrl!''}"
                 data-request-handle="${crossDeviceRequestHandle!''}"
+                data-poll-interval-ms="${(crossDevicePollIntervalMs!2000)?c}"
                 hidden
             ></div>
-            <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-cross-device-sse.js"></script>
+            <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-cross-device-status.js"></script>
         </#if>
     </#if>
 </@layout.registrationLayout>

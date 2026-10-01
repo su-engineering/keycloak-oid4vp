@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ public class Oid4vpDirectPostService {
 
     /**
      * Stores the verified identity in the authentication session and signals completion.
-     * For cross-device flows, returns an empty 200 OK (the browser polls via SSE).
+     * For cross-device flows, returns an empty 200 OK (the login page picks up completion via status polling).
      * For same-device flows, returns a JSON redirect to the complete-auth endpoint.
      */
     public Response storeAndSignal(
@@ -236,6 +236,12 @@ public class Oid4vpDirectPostService {
             return null;
         }
         return authSessionResolver.resolveFromTokenEntry(flowContext.rootSessionId(), flowContext.tabId());
+    }
+
+    /** Returns the completion URL once the wallet has finished a cross-device flow, else {@code null}. */
+    public String resolveCrossDeviceCompleteAuthUrl(String requestHandle) {
+        Map<String, String> signal = session.singleUseObjects().get(CROSS_DEVICE_COMPLETE_PREFIX + requestHandle);
+        return signal != null ? signal.get(KEY_COMPLETE_AUTH_URL) : null;
     }
 
     public String buildCompleteAuthUrl(String requestHandle) {

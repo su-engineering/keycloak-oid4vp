@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,7 +159,7 @@ class Oid4vpDirectPostServiceTest {
     }
 
     @Test
-    void storeAndSignal_sameDevice_skipsCrossDeviceSseSignal() {
+    void storeAndSignal_sameDevice_skipsCrossDeviceCompletionSignal() {
         AuthenticationSessionModel authSession = mock(AuthenticationSessionModel.class);
         RootAuthenticationSessionModel rootSession = mock(RootAuthenticationSessionModel.class);
         Oid4vpIdentityProviderConfig idpConfig = new Oid4vpIdentityProviderConfig();
@@ -182,7 +182,7 @@ class Oid4vpDirectPostServiceTest {
     }
 
     @Test
-    void storeAndSignal_crossDevice_storesSseSignal() {
+    void storeAndSignal_crossDevice_storesCompletionSignal() {
         AuthenticationSessionModel authSession = mock(AuthenticationSessionModel.class);
         RootAuthenticationSessionModel rootSession = mock(RootAuthenticationSessionModel.class);
         Oid4vpIdentityProviderConfig idpConfig = new Oid4vpIdentityProviderConfig();

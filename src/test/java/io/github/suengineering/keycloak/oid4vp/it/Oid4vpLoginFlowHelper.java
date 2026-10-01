@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,10 +146,6 @@ class Oid4vpLoginFlowHelper {
         }
     }
 
-    void waitForSseConnection() {
-        LOG.info("[Test] Cross-device flow uses durable completion state; skipping pre-wallet SSE readiness wait");
-    }
-
     String getRequestHandle() {
         String crossDeviceRequestHandle =
                 (String) page.evaluate("() => document.querySelector('#crossDeviceRequestHandle')?.value ?? ''");
@@ -166,16 +162,16 @@ class Oid4vpLoginFlowHelper {
     void waitForLoginCompletion(WalletResponse walletResponse) {
         String redirectUri = walletResponse.redirectUri();
 
-        boolean sseNavigated = false;
+        boolean pageNavigated = false;
         try {
             page.waitForURL(this::isPostLoginUrl, new Page.WaitForURLOptions().setTimeout(10000));
-            sseNavigated = true;
-            LOG.info("[Test] SSE navigated browser to: {}", page.url());
+            pageNavigated = true;
+            LOG.info("[Test] Browser navigated on its own to: {}", page.url());
         } catch (Exception ignored) {
-            LOG.info("[Test] SSE did not navigate within timeout, falling back to manual redirect");
+            LOG.info("[Test] Browser did not navigate on its own within timeout, falling back to manual redirect");
         }
 
-        if (!sseNavigated && redirectUri != null) {
+        if (!pageNavigated && redirectUri != null) {
             LOG.info("[Test] Navigating to redirect_uri: {}", redirectUri);
             page.navigate(redirectUri);
             page.waitForLoadState(LoadState.NETWORKIDLE);

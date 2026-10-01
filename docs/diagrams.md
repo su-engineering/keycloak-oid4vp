@@ -15,8 +15,8 @@ flowchart TB
         VP[Presentation verifier] --> Mapping[Identity and claim mapping]
         Mapping --> Broker[Keycloak broker completion]
         State --> Broker
-        State --> SSE[Node-local SSE workers]
-        SSE --> Theme
+        State --> StatusCheck[Cross-device status check]
+        StatusCheck --> Theme
     end
     Request -->|Signed request| Wallet
     VP -->|HTTPS keys, when DID enabled| DID[did:web document]
@@ -27,7 +27,7 @@ flowchart TB
 
 **Trust sources are policy inputs.** A valid signature proves control of a key; issuer authorization depends on configuration and the checks actually implemented. Read [DID limitations](configuration.md#didweb-issuer-verification) and [trust-list signature policy](configuration.md#trust-and-verification).
 
-In a cluster, each node serves its own SSE connections and polls shared completion state. The authentication session and single-use object store must be available across nodes.
+In a cluster, any node can answer the login page's status polls because each poll reads shared completion state. The authentication session and single-use object store must be available across nodes.
 
 ## Login and completion
 
@@ -44,7 +44,10 @@ sequenceDiagram
     Browser->>KC: OIDC login / identity provider
     KC-->>Browser: Wallet link and QR code
     opt Cross-device
-        Browser->>KC: Subscribe to status stream (SSE)
+        loop Every poll interval until complete
+            Browser->>KC: GET /cross-device/status
+            KC-->>Browser: pending
+        end
     end
     Person->>Wallet: Open link or scan QR
     Wallet->>KC: Fetch request object
@@ -60,7 +63,8 @@ sequenceDiagram
         Wallet->>Browser: Open completion URL
     else Cross-device
         KC-->>Wallet: Acknowledge response
-        KC-->>Browser: SSE complete event with completion URL
+        Browser->>KC: GET /cross-device/status
+        KC-->>Browser: complete, with completion URL
     end
     Browser->>KC: Complete in the initiating browser session
     KC->>KC: Consume deferred state and run broker flow
@@ -100,6 +104,6 @@ DID resolution precedes strict X.509 handling in this baseline. A failed signatu
 | `state` and `nonce` | Each request-object fetch | Bind the presentation to a particular request instance | Expiry or invalidation of the parent flow |
 | Response encryption key | Per encrypted request instance | Decrypt the corresponding `direct_post.jwt` response | Request-context lifetime |
 | Deferred identity | After accepted presentation | Resume the broker flow in the original browser | `/complete-auth` consumption or expiry |
-| Completion marker | Accepted cross-device response | Allow SSE delivery/reconnect until completion | Completion consumption or TTL |
+| Completion marker | Accepted cross-device response | Let status polls observe completion | Completion consumption or TTL |
 
 Source-level responsibilities and the precise stored keys are documented in [request flow](request-flow.md).

@@ -65,11 +65,12 @@
             </nav>
         </#if>
         <#if (crossDeviceStatusUrl!'')?has_content && (crossDeviceEnabled!false)>
-            <div id="oid4vp-cross-device-sse-config" hidden
+            <div id="oid4vp-cross-device-status-config" hidden
                  data-status-url="${crossDeviceStatusUrl}"
-                 data-request-handle="${crossDeviceRequestHandle!''}"></div>
+                 data-request-handle="${crossDeviceRequestHandle!''}"
+                 data-poll-interval-ms="${(crossDevicePollIntervalMs!2000)?c}"></div>
             <#-- Shared extension resource: keep completion behavior identical across themes. -->
-            <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-cross-device-sse.js"></script>
+            <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-cross-device-status.js"></script>
         </#if>
     </#if>
 </@layout.registrationLayout>

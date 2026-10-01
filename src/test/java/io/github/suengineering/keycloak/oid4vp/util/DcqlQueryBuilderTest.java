@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -563,17 +563,7 @@ class DcqlQueryBuilderTest {
             }
 
             @Override
-            public int getSsePollIntervalMs() {
-                return 0;
-            }
-
-            @Override
-            public int getSseTimeoutSeconds() {
-                return 0;
-            }
-
-            @Override
-            public int getSsePingIntervalSeconds() {
+            public int getCrossDevicePollIntervalMs() {
                 return 0;
             }
 

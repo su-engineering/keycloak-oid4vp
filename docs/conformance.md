@@ -46,5 +46,5 @@ Enable the conformance profile and run the full lifecycle so the provider is bui
 - Each scenario uses a fresh Keycloak IdP alias so mapper and verifier config changes cannot leak across runs.
 - The Keycloak login page renders the normal `openid4vp://` same-device deep link. The test reuses the `client_id` and `request_uri` from that link and sends them to the OIDF module's HTTPS `authorization_endpoint`.
 - Before calling the OIDF module, the test fetches the local request object and asserts that `client_id` and DCQL match the scenario. This catches stale local config before a suite failure hides the root cause.
-- In multi-node deployments, conformance callbacks and cross-device completion require a shared Keycloak single-use object store; each node serves only its local SSE connections, and each open watcher polls completion state from that shared store on a virtual thread.
+- In multi-node deployments, conformance callbacks and cross-device completion require a shared Keycloak single-use object store; the login page's status polls can be answered by any node because each poll reads that shared store.
 - If the OIDF demo suite renames plans or modules again, override `OID4VP_CONFORMANCE_PLAN_NAME` and optionally `OID4VP_CONFORMANCE_TEST_MODULE` instead of changing test code first.

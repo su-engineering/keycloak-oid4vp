@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpResponseMode;
+import io.github.suengineering.keycloak.oid4vp.service.Oid4vpDirectPostService;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectStore;
 import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
@@ -75,9 +75,7 @@ class Oid4vpIdentityProviderEndpointTest {
         provider = mock(Oid4vpIdentityProvider.class);
         config = mock(Oid4vpIdentityProviderConfig.class);
         when(config.getAlias()).thenReturn("oid4vp");
-        when(config.getSsePollIntervalMs()).thenReturn(2000);
-        when(config.getSseTimeoutSeconds()).thenReturn(120);
-        when(config.getSsePingIntervalSeconds()).thenReturn(10);
+        when(config.getCrossDevicePollIntervalMs()).thenReturn(2000);
         when(config.getCrossDeviceCompleteTtlSeconds()).thenReturn(300);
         when(config.isEnforceHaip()).thenReturn(true);
         when(config.getResolvedResponseMode()).thenReturn(Oid4vpResponseMode.DIRECT_POST_JWT);
@@ -313,32 +311,63 @@ class Oid4vpIdentityProviderEndpointTest {
 
     @Test
     void crossDeviceStatus_withoutRequestHandle_throwsBadRequest() {
-        assertThatThrownBy(() -> endpoint.crossDeviceStatus(null, null, null))
+        assertThatThrownBy(() -> endpoint.crossDeviceStatus(null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Missing request handle");
     }
 
     @Test
     void crossDeviceStatus_withExpiredAuthSession_returnsNoContent() {
-        assertThatThrownBy(() -> endpoint.crossDeviceStatus("handle-1", null, null))
-                .isInstanceOf(WebApplicationException.class)
-                .extracting(throwable ->
-                        ((WebApplicationException) throwable).getResponse().getStatus())
-                .isEqualTo(204);
+        Response response = endpoint.crossDeviceStatus("handle-1");
+
+        assertThat(response.getStatus()).isEqualTo(204);
+        assertThat(response.getHeaderString("Cache-Control")).contains("no-store");
     }
 
     @Test
     void crossDeviceStatus_withMismatchedBrowserSession_returnsNoContent() {
+        stubCrossDeviceFlowHandle();
+        when(context.getAuthenticationSession()).thenReturn(null);
+
+        Response response = endpoint.crossDeviceStatus("handle-1");
+
+        assertThat(response.getStatus()).isEqualTo(204);
+    }
+
+    @Test
+    void crossDeviceStatus_beforeWalletCompletes_returnsPending() {
+        stubCrossDeviceFlowHandle();
+        when(context.getAuthenticationSession()).thenReturn(authSession);
+
+        Response response = endpoint.crossDeviceStatus("handle-1");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getHeaderString("Cache-Control")).contains("no-store");
+        assertThat(response.getEntity()).isEqualTo(Map.of("status", "pending"));
+    }
+
+    @Test
+    void crossDeviceStatus_afterWalletCompletes_returnsCompletionUrl() {
+        stubCrossDeviceFlowHandle();
+        when(context.getAuthenticationSession()).thenReturn(authSession);
+        when(session.singleUseObjects().get(Oid4vpDirectPostService.CROSS_DEVICE_COMPLETE_PREFIX + "handle-1"))
+                .thenReturn(Map.of("complete_auth_url", "http://localhost:8080/complete-auth?request_handle=handle-1"));
+
+        Response response = endpoint.crossDeviceStatus("handle-1");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getEntity())
+                .isEqualTo(Map.of(
+                        "status",
+                        "complete",
+                        OAuth2Constants.REDIRECT_URI,
+                        "http://localhost:8080/complete-auth?request_handle=handle-1"));
+    }
+
+    private void stubCrossDeviceFlowHandle() {
         when(store.resolveFlowHandle(session, "handle-1"))
                 .thenReturn(new Oid4vpRequestObjectStore.FlowContextEntry(
                         "root-session", "tab-1", "effective-client", "https://example.com/endpoint", "cross_device"));
-        when(context.getAuthenticationSession()).thenReturn(null);
-
-        assertThatThrownBy(() -> endpoint.crossDeviceStatus("handle-1", null, null))
-                .isInstanceOf(WebApplicationException.class)
-                .extracting(throwable ->
-                        ((WebApplicationException) throwable).getResponse().getStatus())
-                .isEqualTo(204);
     }
 
     @Test

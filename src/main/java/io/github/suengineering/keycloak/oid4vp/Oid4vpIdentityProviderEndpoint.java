@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Bundesagentur für Arbeit
- * Modified by su-engineering: package namespace migration (2026).
+ * Modified by su-engineering: package namespace migration and cross-device status polling (2026).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import static io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants.*;
 
 import io.github.suengineering.keycloak.oid4vp.domain.DecryptedResponse;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpJwk;
-import io.github.suengineering.keycloak.oid4vp.service.Oid4vpCrossDeviceSseService;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpDirectPostService;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpEndpointResponseFactory;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpRequestObjectService;
@@ -37,12 +36,10 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.CacheControl;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.sse.Sse;
-import jakarta.ws.rs.sse.SseEventSink;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -65,7 +62,7 @@ import org.keycloak.utils.StringUtil;
  *   <li>{@code POST /} — receives the wallet's direct_post response ({@code vp_token} or encrypted JWE)
  *   <li>{@code GET|POST /request-object/{handle}} — serves the signed (and optionally encrypted)
  *       authorization request object to the wallet
- *   <li>{@code GET /cross-device/status} — SSE stream for cross-device login polling
+ *   <li>{@code GET /cross-device/status} — short JSON status check polled by the cross-device login page
  *   <li>{@code GET /complete-auth} — finalizes authentication after the wallet's response is processed
  * </ul>
  *
@@ -89,7 +86,6 @@ public class Oid4vpIdentityProviderEndpoint {
     private final Oid4vpAuthSessionResolver authSessionResolver;
     private final Oid4vpResponseDecryptor responseDecryptor;
     private final Oid4vpDirectPostService directPostService;
-    private final Oid4vpCrossDeviceSseService sseService;
     private final Oid4vpRequestObjectService requestObjectService;
     private final Oid4vpEndpointResponseFactory responseFactory;
 
@@ -110,7 +106,6 @@ public class Oid4vpIdentityProviderEndpoint {
         this.responseDecryptor = new Oid4vpResponseDecryptor();
         this.responseFactory = new Oid4vpEndpointResponseFactory(session, realm, provider.getConfig());
         this.directPostService = new Oid4vpDirectPostService(session, realm, provider.getConfig(), requestObjectStore);
-        this.sseService = new Oid4vpCrossDeviceSseService(session, realm, provider.getConfig());
         this.requestObjectService = new Oid4vpRequestObjectService(
                 session, provider, requestObjectStore, authSessionResolver, responseFactory);
     }
@@ -386,24 +381,42 @@ public class Oid4vpIdentityProviderEndpoint {
         return requestObjectService.generateRequestObject(requestHandle, walletNonce, walletMetadata);
     }
 
+    /**
+     * Reports whether the wallet has completed a cross-device login. The page polls this with short,
+     * ordinary requests so no Keycloak session or transaction outlives a single request.
+     *
+     * <p>Returns {@code 204} when the flow is unknown, expired, or belongs to another browser, which
+     * tells the page to stop polling; otherwise {@code {"status":"pending"}} or
+     * {@code {"status":"complete","redirect_uri":...}}.
+     */
     @GET
     @Path("/cross-device/status")
-    @Produces("text/event-stream")
-    public void crossDeviceStatus(
-            @QueryParam(PARAM_REQUEST_HANDLE) String requestHandle, @Context SseEventSink eventSink, @Context Sse sse) {
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response crossDeviceStatus(@QueryParam(PARAM_REQUEST_HANDLE) String requestHandle) {
         if (StringUtil.isBlank(requestHandle)) {
             throw new BadRequestException("Missing request handle parameter");
         }
         AuthenticationSessionModel expectedAuthSession = directPostService.resolveExpectedAuthSession(requestHandle);
         if (expectedAuthSession == null) {
-            throw stopSseReconnects();
+            return noStore(Response.noContent()).build();
         }
         AuthenticationSessionModel currentBrowserSession =
                 authSessionResolver.resolveCurrentBrowserSession(expectedAuthSession);
         if (!authSessionResolver.sameAuthenticationSession(currentBrowserSession, expectedAuthSession)) {
-            throw stopSseReconnects();
+            return noStore(Response.noContent()).build();
         }
-        sseService.subscribe(requestHandle, eventSink, sse, expectedAuthSession);
+        String completeAuthUrl = directPostService.resolveCrossDeviceCompleteAuthUrl(requestHandle);
+        Map<String, String> body = completeAuthUrl == null
+                ? Map.of("status", "pending")
+                : Map.of("status", "complete", OAuth2Constants.REDIRECT_URI, completeAuthUrl);
+        return noStore(Response.ok(body, MediaType.APPLICATION_JSON_TYPE)).build();
+    }
+
+    private static Response.ResponseBuilder noStore(Response.ResponseBuilder builder) {
+        CacheControl cacheControl = new CacheControl();
+        cacheControl.setNoStore(true);
+        cacheControl.setNoCache(true);
+        return builder.cacheControl(cacheControl);
     }
 
     @GET
@@ -458,14 +471,5 @@ public class Oid4vpIdentityProviderEndpoint {
                 .error(Errors.IDENTITY_PROVIDER_ERROR);
 
         return responseFactory.jsonErrorResponse(Response.Status.OK, error, errorDescription);
-    }
-
-    /**
-     * SSE resource methods with {@link SseEventSink} do not return a regular {@link Response} body.
-     * Aborting the handshake with HTTP 204 is the SSE-compatible way to stop browser reconnects for
-     * dead or mismatched login flows.
-     */
-    private WebApplicationException stopSseReconnects() {
-        return new WebApplicationException(Response.noContent().build());
     }
 }
