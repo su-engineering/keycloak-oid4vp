@@ -38,6 +38,8 @@
     <jdk.version>21</jdk.version>
 
     <keycloak.version>26.8.1</keycloak.version>
+    <!-- bcprov, bcpkix and bcutil must share one version: mixed versions fail at runtime -->
+    <bouncycastle.test.version>1.86</bouncycastle.test.version>
     <testcontainers.version>2.0.3</testcontainers.version>
     <playwright.version>1.59.0</playwright.version>
     <bytebuddy.version>1.18.8</bytebuddy.version>
@@ -218,7 +220,7 @@
     <dependency>
       <groupId>org.apache.httpcomponents.client5</groupId>
       <artifactId>httpclient5</artifactId>
-      <version>5.6</version>
+      <version>5.6.3</version>
       <scope>test</scope>
     </dependency>
 
@@ -234,19 +236,19 @@
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcpkix-jdk18on</artifactId>
-      <version>1.83</version>
+      <version>${bouncycastle.test.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcutil-jdk18on</artifactId>
-      <version>1.83</version>
+      <version>${bouncycastle.test.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcprov-jdk18on</artifactId>
-      <version>1.83</version>
+      <version>${bouncycastle.test.version}</version>
       <scope>test</scope>
     </dependency>
 
