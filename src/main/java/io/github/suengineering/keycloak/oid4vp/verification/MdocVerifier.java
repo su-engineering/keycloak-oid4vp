@@ -118,7 +118,7 @@ public class MdocVerifier {
                         document, mso, docType, clientId, nonce, responseUri, mdocGeneratedNonce, jwkThumbprint);
             }
 
-            return new MdocVerificationResult(claims, docType);
+            return new MdocVerificationResult(claims, docType, msoStatus(mso));
         } catch (Exception e) {
             throw wrapIfNeeded(e, "mDoc verification failed: ");
         }
@@ -398,6 +398,17 @@ public class MdocVerifier {
         Instant validUntil = parseInstant(val(validityInfo, "validUntil"));
         if (validUntil == null) throw new IllegalStateException("MSO validityInfo has no validUntil");
         if (validUntil.isBefore(now)) throw new IllegalStateException("Credential expired");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> msoStatus(CBORPairList mso) {
+        CBORItem status = val(mso, "status");
+        if (status == null) return null;
+        Object converted = cborToJava(status);
+        if (!(converted instanceof Map<?, ?> map)) {
+            throw new IllegalStateException("MSO status is not a map");
+        }
+        return (Map<String, Object>) map;
     }
 
     /** Maps the MSO digestAlgorithm (ISO/IEC 18013-5 9.1.2.5) to a JCA name; unknown values fail. */

@@ -216,7 +216,15 @@ public class VpTokenProcessor {
             if (StringUtil.isBlank(result.issuer())) {
                 throw new IdentityBrokerException("SD-JWT credential has no issuer: " + credentialId);
             }
-            statusListVerifier.checkRevocationStatus(result.claims());
+            // The status reference must be issuer-signed, not selectively disclosable.
+            if (result.claims().containsKey("status")
+                    && !result.issuerSignedClaims().containsKey("status")) {
+                throw new IdentityBrokerException(
+                        "SD-JWT status claim must not be selectively disclosable: " + credentialId);
+            }
+            statusListVerifier.checkRevocationStatus(
+                    Map.of("status", result.issuerSignedClaims().getOrDefault("status", Map.of())),
+                    new StatusListVerifier.StatusListTrust(result.issuer(), result.issuerVerifiers()));
             return new VerifiedCredential(
                     credentialId, result.issuer(), result.credentialType(), result.claims(), PresentationType.SD_JWT);
         }
@@ -232,7 +240,11 @@ public class VpTokenProcessor {
                     alternateResponseUri,
                     mdocGeneratedNonce,
                     jwkThumbprintBytes);
-            statusListVerifier.checkRevocationStatus(result.claims());
+            // mDoc status lives in the signed MobileSecurityObject, never in disclosed elements.
+            if (result.msoStatus() != null) {
+                statusListVerifier.checkRevocationStatus(
+                        Map.of("status", result.msoStatus()), StatusListVerifier.StatusListTrust.trustAnchorsOnly());
+            }
             return new VerifiedCredential(credentialId, null, result.docType(), result.claims(), PresentationType.MDOC);
         }
 
