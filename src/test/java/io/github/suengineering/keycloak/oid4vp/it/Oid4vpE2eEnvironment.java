@@ -460,13 +460,28 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No trust list served at " + trustListUrl));
         try {
-            String jwt = walletContainer.client().getTrustListById(trustList.id());
+            String jwt =
+                    walletContainer.client().getTrustListById(trustList.id()).trim();
             List<String> x5c =
-                    new org.keycloak.jose.jws.JWSInput(jwt.trim()).getHeader().getX5c();
-            if (x5c == null || x5c.isEmpty()) {
-                throw new IllegalStateException("Trust list " + trustListUrl + " has no x5c header to pin");
+                    new org.keycloak.jose.jws.JWSInput(jwt).getHeader().getX5c();
+            if (x5c != null && !x5c.isEmpty()) {
+                return toPem("CERTIFICATE", Base64.getMimeDecoder().decode(x5c.get(0)));
             }
-            return toPem("CERTIFICATE", Base64.getMimeDecoder().decode(x5c.get(0)));
+            // The dev wallet signs its trust list with its CA key and sends no x5c; pin whichever
+            // certificate listed in the trust list verifies the signature.
+            com.nimbusds.jose.JWSObject jws = com.nimbusds.jose.JWSObject.parse(jwt);
+            java.util.regex.Matcher candidates = java.util.regex.Pattern.compile("\"(MII[A-Za-z0-9+/=]{100,})\"")
+                    .matcher(jws.getPayload().toString());
+            java.security.cert.CertificateFactory factory = java.security.cert.CertificateFactory.getInstance("X.509");
+            while (candidates.find()) {
+                X509Certificate candidate = (X509Certificate) factory.generateCertificate(
+                        new java.io.ByteArrayInputStream(Base64.getDecoder().decode(candidates.group(1))));
+                if (candidate.getPublicKey() instanceof java.security.interfaces.ECPublicKey ecKey
+                        && jws.verify(new com.nimbusds.jose.crypto.ECDSAVerifier(ecKey))) {
+                    return toPem("CERTIFICATE", candidate.getEncoded());
+                }
+            }
+            throw new IllegalStateException("No certificate found that verifies trust list " + trustListUrl);
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
