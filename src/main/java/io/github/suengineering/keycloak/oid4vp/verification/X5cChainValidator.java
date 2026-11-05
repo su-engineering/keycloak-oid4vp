@@ -24,6 +24,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -132,7 +133,20 @@ public final class X5cChainValidator {
         if (chain.size() > 1 && topOfChain.getBasicConstraints() < 0) {
             throw new IllegalStateException("x5c top certificate must be a CA certificate");
         }
-        for (X509Certificate trusted : trustedCertificates) {
+        // A chain whose leaf is itself a trusted certificate (pinned end-entity) is accepted as is.
+        for (X509Certificate trusted : currentlyValid(trustedCertificates)) {
+            if (Arrays.equals(trusted.getEncoded(), leaf.getEncoded())) {
+                LOG.debugf(
+                        "x5c leaf is a pinned trusted certificate: %s",
+                        trusted.getSubjectX500Principal().getName());
+                return leaf.getPublicKey();
+            }
+        }
+        for (X509Certificate trusted : currentlyValid(trustedCertificates)) {
+            if (trusted.getBasicConstraints() < 0) {
+                // Only CA certificates may anchor a presented chain.
+                continue;
+            }
             try {
                 topOfChain.verify(trusted.getPublicKey());
                 LOG.debugf(
@@ -200,17 +214,20 @@ public final class X5cChainValidator {
             x5c = List.of();
         }
         if (!x5c.isEmpty()) {
+            // A presented chain is authoritative: if it does not validate, the JWT is rejected rather
+            // than retried against the trusted keys, which would bypass the chain's own constraints.
+            PublicKey leafKey;
             try {
-                PublicKey leafKey = validateChain(x5c, trustedCerts);
-                verifyJwtSignature(jwt, leafKey);
-                LOG.debug("JWT signature verified via x5c chain");
-                return;
+                leafKey = validateChain(x5c, trustedCerts);
             } catch (Exception e) {
-                LOG.debugf("JWT x5c chain validation failed: %s", e.getMessage());
+                throw new IllegalStateException("JWT x5c chain validation failed: " + e.getMessage(), e);
             }
+            verifyJwtSignature(jwt, leafKey);
+            LOG.debug("JWT signature verified via x5c chain");
+            return;
         }
 
-        for (X509Certificate cert : trustedCerts) {
+        for (X509Certificate cert : currentlyValid(trustedCerts)) {
             try {
                 verifyJwtSignature(jwt, cert.getPublicKey());
                 LOG.debug("JWT signature verified with trusted key");
@@ -220,6 +237,25 @@ public final class X5cChainValidator {
         }
 
         throw new IllegalStateException("JWT signature verification failed: no trusted key matched");
+    }
+
+    /** Returns the trusted certificates that are within their validity period. */
+    static List<X509Certificate> currentlyValid(List<X509Certificate> certificates) {
+        if (certificates == null) {
+            return List.of();
+        }
+        List<X509Certificate> valid = new ArrayList<>();
+        for (X509Certificate certificate : certificates) {
+            try {
+                certificate.checkValidity();
+                valid.add(certificate);
+            } catch (CertificateExpiredException | CertificateNotYetValidException e) {
+                LOG.debugf(
+                        "Ignoring trusted certificate outside its validity period: %s",
+                        certificate.getSubjectX500Principal().getName());
+            }
+        }
+        return valid;
     }
 
     private static String resolveKeyType(PublicKey publicKey) {

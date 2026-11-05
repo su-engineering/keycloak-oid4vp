@@ -389,7 +389,7 @@ class SdJwtVerifierTest {
     }
 
     @Test
-    void verify_withIssuerMetadataResolverAndKid_fallsBackWhenX5cIsUnavailable() throws Exception {
+    void verify_issuerMetadataKeyWithoutTrustAnchor_isRejected() throws Exception {
         ECKey metadataKey = new ECKeyGenerator(Curve.P_256).keyID("issuer-key").generate();
         SdJwtVerifier verifierWithFallback = new SdJwtVerifier(
                 60,
@@ -405,10 +405,28 @@ class SdJwtVerifierTest {
                 Map.of("iss", "https://issuer.example", "vct", "PID"), metadataKey, "issuer-key");
         String sdJwt = jwt + "~";
 
-        SdJwtVerificationResult result = verifierWithFallback.verify(sdJwt, null, null, List.of());
+        assertThatThrownBy(() -> verifierWithFallback.verify(sdJwt, null, null, List.of()))
+                .isInstanceOf(IllegalStateException.class);
+    }
 
-        assertThat(result.issuer()).isEqualTo("https://issuer.example");
-        assertThat(result.credentialType()).isEqualTo("PID");
+    @Test
+    void verify_issuerMetadataKeyWithoutX5cChain_isRejectedEvenWithTrustAnchors() throws Exception {
+        ECKey metadataKey = new ECKeyGenerator(Curve.P_256).keyID("issuer-key").generate();
+        SdJwtVerifier verifierWithFallback = new SdJwtVerifier(
+                60,
+                300,
+                new FakeIssuerMetadataResolver(new JwtVcIssuerMetadataResolver.ResolvedIssuerKey(
+                        "issuer-key",
+                        metadataKey.toECPublicKey(),
+                        List.of(),
+                        Instant.now().plusSeconds(3600))),
+                false);
+
+        String jwt = buildSignedJwtWithKeyAndKid(
+                Map.of("iss", "https://issuer.example", "vct", "PID"), metadataKey, "issuer-key");
+
+        assertThatThrownBy(() -> verifierWithFallback.verify(jwt + "~", null, null, List.of(signingCert)))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
