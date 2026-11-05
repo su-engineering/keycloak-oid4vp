@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Breaking:** a configured trust list must be signed. Without `trustListSigningCertPem` the trust list is now rejected instead of being trusted as fetched. The new `trustListAllowUnsigned` option restores the old behaviour for local testing only.
+- Correct the Admin Console help text: the trust list is an ETSI TS 119 602 List of Trusted Entities in its JSON/JWT binding, not a TS 119 612 XML trusted list, and an empty Trust List URL does not skip signature verification.
 - Token Status List signatures are always verified. Trust comes from the trust list's revocation services, otherwise its issuance services, otherwise the keys that verified the referenced credential (for example a did:web issuer). A token that none of these can verify is rejected. Cached lists verified with one issuer's own key are not reused for other issuers.
 - mDoc revocation is checked against the `status` in the signed MobileSecurityObject instead of the disclosed data elements. An SD-JWT `status` claim must be issuer-signed; a selectively disclosable one is rejected.
 - Bound status list downloads to 4 MiB and decompressed lists to 16 MiB.

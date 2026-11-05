@@ -69,6 +69,7 @@ public class TrustListProvider {
     private final Duration maxCacheTtl;
     private final Duration maxStaleAge;
     private final List<X509Certificate> signingCertificates;
+    private final boolean allowUnsigned;
     private volatile String currentLoTEType;
 
     /** Creates a provider that fetches the trust list from the given URL. */
@@ -110,6 +111,23 @@ public class TrustListProvider {
             Duration maxCacheTtl,
             Duration maxStaleAge,
             List<X509Certificate> signingCertificates) {
+        this(session, trustListUrl, maxCacheTtl, maxStaleAge, signingCertificates, false);
+    }
+
+    /**
+     * Creates a provider with full configuration.
+     *
+     * @param allowUnsigned insecure, for local testing only: when no signing certificate is
+     *     configured, accept the trust list without verifying its signature instead of rejecting it
+     */
+    public TrustListProvider(
+            KeycloakSession session,
+            String trustListUrl,
+            Duration maxCacheTtl,
+            Duration maxStaleAge,
+            List<X509Certificate> signingCertificates,
+            boolean allowUnsigned) {
+        this.allowUnsigned = allowUnsigned;
         this.session = session;
         this.trustListUrl = trustListUrl;
         this.staticCertificates = null;
@@ -126,6 +144,7 @@ public class TrustListProvider {
         this.maxCacheTtl = null;
         this.maxStaleAge = DEFAULT_MAX_STALE_AGE;
         this.signingCertificates = null;
+        this.allowUnsigned = false;
     }
 
     /**
@@ -245,6 +264,10 @@ public class TrustListProvider {
 
     void verifySignature(String jwt) throws Exception {
         if (signingCertificates == null || signingCertificates.isEmpty()) {
+            if (!allowUnsigned) {
+                throw new IllegalStateException("Trust list " + trustListUrl
+                        + " cannot be verified: no signing certificate configured (trustListSigningCertPem)");
+            }
             if (WARNED_UNSIGNED_TRUST_LISTS.add(trustListUrl)) {
                 LOG.warnf(
                         "Trust list JWT signature not verified for %s: no signing certificate configured",

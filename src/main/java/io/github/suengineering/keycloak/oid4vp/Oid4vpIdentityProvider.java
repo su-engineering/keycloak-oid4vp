@@ -115,7 +115,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                                 trustListSigningCerts,
                                 config.getTrustListMaxStaleAge(),
                                 config.getTrustListLoTEType(),
-                                didResolver)));
+                                didResolver,
+                                config.isTrustListAllowUnsigned())));
 
         RealmModel realm = session.getContext().getRealm();
         int loginTimeoutSeconds = realm != null ? realm.getAccessCodeLifespanLogin() : DEFAULT_LOGIN_TIMEOUT_SECONDS;
@@ -220,7 +221,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                 getConfig().getTrustListUrl(),
                 getConfig().getTrustListMaxCacheTtl(),
                 getConfig().getTrustListMaxStaleAge(),
-                trustListSigningCerts);
+                trustListSigningCerts,
+                getConfig().isTrustListAllowUnsigned());
         try {
             List<String> authorityKeyIdentifiers = trustListProvider.getTrustedAuthorityKeyIdentifiers();
             if (authorityKeyIdentifiers.isEmpty()) {
