@@ -13,7 +13,7 @@ The deployed did:web SD-JWT flow is the compatibility baseline. These findings c
 | Issuer policy | Issuer allow-lists apply to every SD-JWT credential; each mDoc uses certificate trust. | Continue independent trust-policy review and conformance testing. |
 | DCQL conditions | Responses are checked against saved query IDs, formats, types, paths, values and required sets. Mixed formats and repeated presentations are retained separately. | Add wallet interoperability and conformance coverage; cross-credential subject relationships and arbitrary condition languages remain outside this policy. |
 | Login completion | Completion uses public request handles plus the authentication session; later designs add a single-use response code and reject repeated successful submissions. | Reproduce relevant attacks, then test replay rejection, abandoned-attempt isolation, and cross-device completion across nodes. |
-| Revocation | The static status-list cache uses only the URI; decompression is unbounded; without trust certificates, signature verification is skipped. | Isolate cache entries by trust policy, bound decompression, and define signed-status trust for DID issuers. |
+| Revocation | Status List Token signatures are always verified (trust list, then the credential issuer's own keys); cache entries are scoped to the trust that verified them; downloads and decompression are bounded. Only the JWT form is supported. | Add the CWT form and decide whether suspended credentials should get a distinct error. |
 
 The `did:webvh` path validates signed history, required witnesses, current assertion keys and `kid`. Current-state resolution does not persist rollback checkpoints or consult watchers. See [its supported profile and limits](did-webvh.md).
 

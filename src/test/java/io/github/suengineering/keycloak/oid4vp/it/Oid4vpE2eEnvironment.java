@@ -201,7 +201,8 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
                 + toPem("CERTIFICATE", haipCaCert.getEncoded())
                 + "\n"
                 + toPem("PRIVATE KEY", haipLeafKeyPair.getPrivate().getEncoded());
-        Oid4vpTestKeycloakSetup.configureOid4vpIdentityProvider(adminClient, REALM, trustListUrl, haipCertPem);
+        Oid4vpTestKeycloakSetup.configureOid4vpIdentityProvider(
+                adminClient, REALM, trustListUrl, trustListSigningCertPem(wallet, trustListUrl), haipCertPem);
         Oid4vpTestKeycloakSetup.configureSameDeviceFlow(adminClient, REALM, true);
         Oid4vpTestKeycloakSetup.addRedirectUriToClient(adminClient, REALM, "wallet-mock", callbackUrl);
 
@@ -446,6 +447,35 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
     private static String toPem(String type, byte[] der) {
         String base64 = Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(der);
         return "-----BEGIN " + type + "-----\n" + base64 + "\n-----END " + type + "-----";
+    }
+
+    /**
+     * Returns the PEM of the certificate that signs the given trust list, taken from the trust list
+     * JWT's x5c leaf. Pinning it is what a deployment does with its trust list operator's
+     * certificate; the extension rejects unsigned trust lists by default.
+     */
+    String trustListSigningCertPem(Oid4vcContainer walletContainer, String trustListUrl) {
+        TrustListIndexEntry trustList = walletContainer.client().getTrustLists().stream()
+                .filter(entry -> trustListUrl.equals(resolveInternalTrustListUrl(walletContainer, entry)))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No trust list served at " + trustListUrl));
+        try {
+            String jwt = walletContainer.client().getTrustListById(trustList.id());
+            List<String> x5c =
+                    new org.keycloak.jose.jws.JWSInput(jwt.trim()).getHeader().getX5c();
+            if (x5c == null || x5c.isEmpty()) {
+                throw new IllegalStateException("Trust list " + trustListUrl + " has no x5c header to pin");
+            }
+            return toPem("CERTIFICATE", Base64.getMimeDecoder().decode(x5c.get(0)));
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read trust list signing certificate: " + e.getMessage(), e);
+        }
+    }
+
+    String pidTrustListSigningCertPem(Oid4vcContainer walletContainer) {
+        return trustListSigningCertPem(walletContainer, pidTrustListUrl(walletContainer));
     }
 
     private String resolveTrustListUrl(Oid4vcContainer walletContainer, String loTEType) {

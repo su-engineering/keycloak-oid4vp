@@ -317,6 +317,9 @@ class KeycloakOid4vpProtocolConfigE2eIT extends AbstractOid4vpE2eTest {
         try {
             idpConfig
                     .set(Oid4vpIdentityProviderConfig.TRUST_LIST_URL, env.pidTrustListUrl(wallet()))
+                    .set(
+                            Oid4vpIdentityProviderConfig.TRUST_LIST_SIGNING_CERT_PEM,
+                            env.pidTrustListSigningCertPem(wallet()))
                     .set(Oid4vpIdentityProviderConfig.ENFORCE_HAIP, "false")
                     .set(Oid4vpIdentityProviderConfig.DCQL_QUERY, buildDefaultDcqlQuery())
                     .apply();
@@ -354,6 +357,9 @@ class KeycloakOid4vpProtocolConfigE2eIT extends AbstractOid4vpE2eTest {
             Oid4vcContainer walletContainer, String trustListUrl, String dcqlQuery, String usernamePrefix)
             throws Exception {
         idpConfig.set(Oid4vpIdentityProviderConfig.TRUST_LIST_URL, trustListUrl);
+        idpConfig.set(
+                Oid4vpIdentityProviderConfig.TRUST_LIST_SIGNING_CERT_PEM,
+                env.trustListSigningCertPem(walletContainer, trustListUrl));
         if (dcqlQuery != null) {
             idpConfig.set(Oid4vpIdentityProviderConfig.DCQL_QUERY, dcqlQuery);
         }

@@ -247,9 +247,9 @@ Errors can occur at multiple points:
 
 - `trustedAuthoritiesMode` is explicit verifier policy. `none` is the default, `etsi_tl` adds the trust-list URL to DCQL, and `aki` adds extension-derived certificate key identifiers from the trust list.
 - If `trustListLoTEType` is configured, the fetched trust list must match this `LoTEType`, which keeps one OID4VP IdP instance bound to one trust domain. If it is empty, all LoTE types are accepted and a warning is logged.
-- Within an accepted trust list, issuer verification uses certificates from `.../SvcType/.../Issuance` services only, while status-list verification uses `.../SvcType/.../Revocation` services only.
+- Within an accepted trust list, issuer verification uses certificates from `.../SvcType/.../Issuance` services only. Status-list verification uses `.../SvcType/.../Revocation` services, falling back to issuance services and then to the referenced credential's own issuer keys.
 - Each returned credential must match the format and type constraints on its own DCQL query ID.
-- If `trustListSigningCertPem` is not configured, the trust-list JWT signature is not verified and the fetched trust list is trusted as-is. The code warns about that configuration but does not fail startup.
+- If `trustListSigningCertPem` is not configured, the trust list is rejected unless `trustListAllowUnsigned` (local testing only) is enabled.
 - When HAIP is enabled with `x509_hash`, the configured verifier certificate PEM is used for client ID derivation and request-object signing metadata. A full CA-issued chain is validated when present; a single non-self-signed leaf is also accepted, in which case issuer trust is expected to come from configured trust lists.
 
 ## DID issuer resolution

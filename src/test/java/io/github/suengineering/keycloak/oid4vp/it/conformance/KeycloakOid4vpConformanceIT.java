@@ -247,7 +247,8 @@ class KeycloakOid4vpConformanceIT {
                         scenario.credentialProfile().userMappingClaimMdoc(),
                         trustListUrl,
                         null,
-                        scenario.credentialProfile().mappers()));
+                        scenario.credentialProfile().mappers(),
+                        toPem("CERTIFICATE", signingMaterial.certificate().getEncoded())));
         return alias;
     }
 

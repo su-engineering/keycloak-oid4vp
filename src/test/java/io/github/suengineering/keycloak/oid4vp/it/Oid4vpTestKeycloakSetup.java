@@ -41,14 +41,16 @@ public final class Oid4vpTestKeycloakSetup {
             String userMappingClaimMdoc,
             String trustListUrl,
             String trustListLoTEType,
-            List<IdpMapperConfig> mappers) {
+            List<IdpMapperConfig> mappers,
+            String trustListSigningCertPem) {
 
         public Oid4vpIdentityProviderSpec {
             alias = alias != null ? alias : "oid4vp";
             mappers = mappers != null ? List.copyOf(mappers) : List.of();
         }
 
-        static Oid4vpIdentityProviderSpec defaultConfig(String x509CertPem, String trustListUrl) {
+        static Oid4vpIdentityProviderSpec defaultConfig(
+                String x509CertPem, String trustListUrl, String trustListSigningCertPem) {
             return new Oid4vpIdentityProviderSpec(
                     "oid4vp",
                     x509CertPem,
@@ -69,7 +71,8 @@ public final class Oid4vpTestKeycloakSetup {
                                     "session.note",
                                     "credentialFamilyName",
                                     "optional",
-                                    "false"))));
+                                    "false"))),
+                    trustListSigningCertPem);
         }
     }
 
@@ -123,9 +126,16 @@ public final class Oid4vpTestKeycloakSetup {
     }
 
     static void configureOid4vpIdentityProvider(
-            KeycloakAdminClient admin, String realm, String trustListUrl, String x509CertPem) throws Exception {
+            KeycloakAdminClient admin,
+            String realm,
+            String trustListUrl,
+            String trustListSigningCertPem,
+            String x509CertPem)
+            throws Exception {
         replaceOid4vpIdentityProvider(
-                admin, realm, Oid4vpIdentityProviderSpec.defaultConfig(x509CertPem, trustListUrl));
+                admin,
+                realm,
+                Oid4vpIdentityProviderSpec.defaultConfig(x509CertPem, trustListUrl, trustListSigningCertPem));
     }
 
     public static void replaceOid4vpIdentityProvider(
@@ -149,6 +159,9 @@ public final class Oid4vpTestKeycloakSetup {
         config.put(Oid4vpIdentityProviderConfig.USER_MAPPING_CLAIM, spec.userMappingClaim());
         config.put(Oid4vpIdentityProviderConfig.USER_MAPPING_CLAIM_MDOC, spec.userMappingClaimMdoc());
         config.put(Oid4vpIdentityProviderConfig.TRUST_LIST_URL, spec.trustListUrl());
+        if (spec.trustListSigningCertPem() != null) {
+            config.put(Oid4vpIdentityProviderConfig.TRUST_LIST_SIGNING_CERT_PEM, spec.trustListSigningCertPem());
+        }
         if (spec.trustListLoTEType() != null) {
             config.put(Oid4vpIdentityProviderConfig.TRUST_LIST_LOTE_TYPE, spec.trustListLoTEType());
         }
