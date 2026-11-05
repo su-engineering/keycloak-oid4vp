@@ -6,9 +6,9 @@ The deployed did:web SD-JWT flow is the compatibility baseline. These findings c
 
 | Area | Current evidence | Proposed acceptance criteria |
 | --- | --- | --- |
-| did:web key authorization | `DidWebResolver.filterByKeyId` returns every verifier; the resolver does not validate document `id`, controller, or `assertionMethod`. | Reject unrelated documents, unknown `kid`, and unauthorized assertion keys; test rotation and existing issuer documents. |
-| did:web URLs | Path DIDs use `/<path>/.well-known/did.json`; the identifier is decoded before splitting on colons. | Agree a migration to standard path/port handling with deliberate compatibility for deployed issuers. |
-| Network access | Legacy did:web fetches lack size/cache bounds. did:webvh has bounded reads/cache and rejects redirects; both use credential-supplied DNS locations without an explicit destination allow-list. | Define HTTPS/egress policy, redirects, timeouts, size bounds, and bounded caching. |
+| did:web key authorization | The document `id` must equal the DID; only `assertionMethod` keys controlled by the DID are eligible; a `kid` must name one of them. | Test key rotation against existing issuer documents. |
+| did:web URLs | Standard layout (`/<path>/did.json`, encoded ports, split before decoding); `didWebLegacyPathLayout` keeps the previous layout for existing path DIDs. | Retire the legacy option once deployed path-DID issuers have moved. |
+| Network access | did:web documents are capped at 256 KiB; did:webvh has bounded reads/cache and rejects redirects; both use credential-supplied DNS locations without an explicit destination allow-list. | Define HTTPS/egress policy, redirects, timeouts, size bounds, and bounded caching. |
 | Configuration | `allowedDidMethods` now selects the resolver; enabled DID resolution fails closed. DID resolution runs before strict X.509 handling. | Validate the deployed issuer migration and high-assurance profile interaction. |
 | Issuer policy | Issuer allow-lists apply to every SD-JWT credential; each mDoc uses certificate trust. | Continue independent trust-policy review and conformance testing. |
 | DCQL conditions | Responses are checked against saved query IDs, formats, types, paths, values and required sets. Mixed formats and repeated presentations are retained separately. | Add wallet interoperability and conformance coverage; cross-credential subject relationships and arbitrary condition languages remain outside this policy. |

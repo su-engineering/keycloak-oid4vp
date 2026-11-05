@@ -119,19 +119,19 @@ class DidWebResolverTest {
         @Test
         void transformToUrl_domainWithPort() throws Exception {
             String url = invokeTransformToUrl("example.com:8080");
-            assertThat(url).isEqualTo("https://example.com/8080/.well-known/did.json");
+            assertThat(url).isEqualTo("https://example.com/8080/did.json");
         }
 
         @Test
         void transformToUrl_domainWithPath() throws Exception {
             String url = invokeTransformToUrl("example.com:path:to:resource");
-            assertThat(url).isEqualTo("https://example.com/path/to/resource/.well-known/did.json");
+            assertThat(url).isEqualTo("https://example.com/path/to/resource/did.json");
         }
 
         @Test
         void transformToUrl_domainWithMultiplePathSegments() throws Exception {
             String url = invokeTransformToUrl("example.com:a:b:c:d");
-            assertThat(url).isEqualTo("https://example.com/a/b/c/d/.well-known/did.json");
+            assertThat(url).isEqualTo("https://example.com/a/b/c/d/did.json");
         }
 
         private String invokeTransformToUrl(String didWebId) throws Exception {
@@ -188,6 +188,7 @@ class DidWebResolverTest {
         void resolve_httpError404_throwsDidResolutionException() throws Exception {
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenThrow(new RuntimeException("HTTP 404"));
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -205,6 +206,7 @@ class DidWebResolverTest {
         void resolve_httpError500_throwsDidResolutionException() throws Exception {
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenThrow(new RuntimeException("HTTP 500"));
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -222,6 +224,7 @@ class DidWebResolverTest {
         void resolve_invalidJson_throwsDidResolutionException() throws Exception {
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn("not valid json {{{");
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -245,6 +248,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -269,6 +273,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -295,6 +300,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -317,12 +323,14 @@ class DidWebResolverTest {
                         "id": "did:web:example.com#key-1",
                         "type": "Ed25519VerificationKey2020",
                         "controller": "did:web:example.com"
-                    }]
+                    }],
+                    "assertionMethod": ["did:web:example.com#key-1"]
                 }
                 """;
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -346,12 +354,14 @@ class DidWebResolverTest {
                         "type": "JsonWebKey2020",
                         "controller": "did:web:example.com",
                         "publicKeyJwk": {}
-                    }]
+                    }],
+                    "assertionMethod": ["did:web:example.com#key-1"]
                 }
                 """;
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -374,9 +384,10 @@ class DidWebResolverTest {
                         "type": "JsonWebKey2020",
                         "controller": "%s",
                         "publicKeyJwk": %s
-                    }]
+                    }],
+                    "assertionMethod": ["%s"]
                 }
-                """.formatted(did, keyId, did, MAPPER.writeValueAsString(publicKeyJwk));
+                """.formatted(did, keyId, did, MAPPER.writeValueAsString(publicKeyJwk), keyId);
         }
 
         private String buildDidDocJsonWithMultipleKeys(
@@ -402,7 +413,8 @@ class DidWebResolverTest {
                             "controller": "%s",
                             "publicKeyJwk": %s
                         }
-                    ]
+                    ],
+                    "assertionMethod": ["%s", "%s"]
                 }
                 """.formatted(
                             did,
@@ -411,7 +423,9 @@ class DidWebResolverTest {
                             MAPPER.writeValueAsString(publicKeyJwk1),
                             keyId2,
                             did,
-                            MAPPER.writeValueAsString(publicKeyJwk2));
+                            MAPPER.writeValueAsString(publicKeyJwk2),
+                            keyId1,
+                            keyId2);
         }
     }
 
@@ -425,6 +439,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -445,6 +460,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -472,6 +488,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenAnswer(invocation -> responses[callCount[0]++]);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -495,9 +512,10 @@ class DidWebResolverTest {
                         "type": "JsonWebKey2020",
                         "controller": "%s",
                         "publicKeyJwk": %s
-                    }]
+                    }],
+                    "assertionMethod": ["%s"]
                 }
-                """.formatted(did, keyId, did, MAPPER.writeValueAsString(publicKeyJwk));
+                """.formatted(did, keyId, did, MAPPER.writeValueAsString(publicKeyJwk), keyId);
         }
     }
 
@@ -511,6 +529,7 @@ class DidWebResolverTest {
 
             SimpleHttp mockHttp = mock(SimpleHttp.class);
             when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
             when(mockHttp.asString()).thenReturn(didDocJson);
 
             try (var mockedStatic = mockStatic(SimpleHttp.class)) {
@@ -533,9 +552,133 @@ class DidWebResolverTest {
                         "type": "JsonWebKey2020",
                         "controller": "%s",
                         "publicKeyJwk": %s
-                    }]
+                    }],
+                    "assertionMethod": ["%s"]
                 }
-                """.formatted(did, keyId, did, MAPPER.writeValueAsString(publicKeyJwk));
+                """.formatted(did, keyId, did, MAPPER.writeValueAsString(publicKeyJwk), keyId);
+        }
+    }
+
+    @Nested
+    class KeyAuthorization {
+
+        private String method(String id, ECKey key, String controller) throws Exception {
+            return """
+                {"id": "%s", "type": "JsonWebKey2020", "controller": "%s", "publicKeyJwk": %s}
+                """.formatted(
+                    id, controller, MAPPER.writeValueAsString(key.toPublicJWK().toJSONObject()));
+        }
+
+        private List<SignatureVerifierContext> resolveWith(String did, String keyId, String document) {
+            SimpleHttp mockHttp = mock(SimpleHttp.class);
+            when(mockHttp.header(anyString(), anyString())).thenReturn(mockHttp);
+            when(mockHttp.setMaxConsumedResponseSize(anyLong())).thenReturn(mockHttp);
+            try {
+                when(mockHttp.asString()).thenReturn(document);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+            try (var mockedStatic = mockStatic(SimpleHttp.class)) {
+                mockedStatic
+                        .when(() -> SimpleHttp.doGet(anyString(), any(KeycloakSession.class)))
+                        .thenReturn(mockHttp);
+                return new DidWebResolver(session, 3600).resolve(did, keyId);
+            }
+        }
+
+        @Test
+        void documentIdMustMatchDid() throws Exception {
+            String doc = """
+                {"id": "did:web:other.example", "verificationMethod": [%s], "assertionMethod": ["#key-1"]}
+                """.formatted(method("did:web:other.example#key-1", testKey, "did:web:other.example"));
+
+            assertThatThrownBy(() -> resolveWith("did:web:example.com", null, doc))
+                    .isInstanceOf(DidResolutionException.class)
+                    .hasMessageContaining("does not match");
+        }
+
+        @Test
+        void onlyAssertionMethodKeysAreEligible() throws Exception {
+            String doc = """
+                {"id": "did:web:example.com",
+                 "verificationMethod": [%s, %s],
+                 "authentication": ["#key-2"],
+                 "assertionMethod": ["#key-1"]}
+                """.formatted(
+                            method("did:web:example.com#key-1", testKey, "did:web:example.com"),
+                            method("did:web:example.com#key-2", testKey2, "did:web:example.com"));
+
+            assertThat(resolveWith("did:web:example.com", null, doc)).hasSize(1);
+            assertThatThrownBy(() -> resolveWith("did:web:example.com", "did:web:example.com#key-2", doc))
+                    .isInstanceOf(DidResolutionException.class)
+                    .hasMessageContaining("not an assertionMethod key");
+        }
+
+        @Test
+        void kidSelectsOneKeyInRelativeOrAbsoluteForm() throws Exception {
+            String doc = """
+                {"id": "did:web:example.com",
+                 "verificationMethod": [%s, %s],
+                 "assertionMethod": ["#key-1", "did:web:example.com#key-2"]}
+                """.formatted(
+                            method("#key-1", testKey, "did:web:example.com"),
+                            method("did:web:example.com#key-2", testKey2, "did:web:example.com"));
+
+            assertThat(resolveWith("did:web:example.com", null, doc)).hasSize(2);
+            assertThat(resolveWith("did:web:example.com", "#key-1", doc)).hasSize(1);
+            assertThat(resolveWith("did:web:example.com", "did:web:example.com#key-2", doc))
+                    .hasSize(1);
+            assertThatThrownBy(() -> resolveWith("did:web:example.com", "#missing", doc))
+                    .isInstanceOf(DidResolutionException.class);
+        }
+
+        @Test
+        void keysControlledByAnotherDidAreSkipped() throws Exception {
+            String doc = """
+                {"id": "did:web:example.com", "verificationMethod": [%s], "assertionMethod": ["#key-1"]}
+                """.formatted(method("did:web:example.com#key-1", testKey, "did:web:other.example"));
+
+            assertThat(resolveWith("did:web:example.com", null, doc)).isEmpty();
+        }
+
+        @Test
+        void embeddedAssertionMethodIsSupported() throws Exception {
+            String doc = """
+                {"id": "did:web:example.com", "assertionMethod": [%s]}
+                """.formatted(method("did:web:example.com#key-1", testKey, "did:web:example.com"));
+
+            assertThat(resolveWith("did:web:example.com", "#key-1", doc)).hasSize(1);
+        }
+    }
+
+    @Nested
+    class StandardAndLegacyLayout {
+
+        @Test
+        void encodedPortStaysInHost() {
+            assertThat(new DidWebResolver(session, 60).transformToUrl("example.com%3A8443"))
+                    .isEqualTo("https://example.com:8443/.well-known/did.json");
+            assertThat(new DidWebResolver(session, 60).transformToUrl("example.com%3A8443:users:alice"))
+                    .isEqualTo("https://example.com:8443/users/alice/did.json");
+        }
+
+        @Test
+        void legacyLayoutKeepsPreviousPaths() {
+            DidWebResolver legacy = new DidWebResolver(session, 60, true);
+            assertThat(legacy.transformToUrl("example.com:tenant"))
+                    .isEqualTo("https://example.com/tenant/.well-known/did.json");
+            assertThat(legacy.transformToUrl("example.com")).isEqualTo("https://example.com/.well-known/did.json");
+        }
+
+        @Test
+        void unsafeHostsAndSegmentsAreRejected() {
+            DidWebResolver standard = new DidWebResolver(session, 60);
+            assertThatThrownBy(() -> standard.transformToUrl("user%40evil.example"))
+                    .isInstanceOf(DidResolutionException.class);
+            assertThatThrownBy(() -> standard.transformToUrl("example.com:%2E%2E"))
+                    .isInstanceOf(DidResolutionException.class);
+            assertThatThrownBy(() -> standard.transformToUrl("example.com:a%2Fb"))
+                    .isInstanceOf(DidResolutionException.class);
         }
     }
 }

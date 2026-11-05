@@ -20,8 +20,8 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,7 +45,12 @@ import org.keycloak.util.JsonSerialization;
  *   <li>{@code did:web:example.com} &rarr; {@code https://example.com/.well-known/did.json}
  *   <li>{@code did:web:example.com:path:to:resource} &rarr;
  *       {@code https://example.com/path/to/resource/did.json}
+ *   <li>{@code did:web:example.com%3A8443} &rarr; {@code https://example.com:8443/.well-known/did.json}
  * </ul>
+ *
+ * <p>Only keys referenced by the document's {@code assertionMethod} are eligible to sign
+ * credentials. The document {@code id} must equal the DID, a method's {@code controller} (when
+ * present) must be the DID, and a JOSE {@code kid} must name one of the eligible methods.
  *
  * <p>Resolution is performed via HTTP GET requests using Keycloak's {@link SimpleHttp} client. The
  * retrieved DID document is parsed and verification methods are extracted. Each verification
@@ -65,9 +70,12 @@ public class DidWebResolver implements DidResolver {
 
     private static final String DID_WEB_PREFIX = "did:web:";
     private static final String WELL_KNOWN_PATH = "/.well-known/did.json";
+    /** Largest DID document accepted over HTTP. */
+    static final long MAX_DID_DOCUMENT_BYTES = 256 * 1024;
 
     private final KeycloakSession session;
     private final Duration cacheTtl;
+    private final boolean legacyPathLayout;
     private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     /**
@@ -77,8 +85,20 @@ public class DidWebResolver implements DidResolver {
      * @param cacheTtlSeconds the cache TTL in seconds; entries older than this are refreshed
      */
     public DidWebResolver(KeycloakSession session, long cacheTtlSeconds) {
+        this(session, cacheTtlSeconds, false);
+    }
+
+    /**
+     * Creates a new DidWebResolver.
+     *
+     * @param legacyPathLayout resolve path DIDs from {@code /<path>/.well-known/did.json} and
+     *     percent-decode before splitting, as releases up to 0.1.0-rc.1 did, instead of the
+     *     standard {@code /<path>/did.json} layout
+     */
+    public DidWebResolver(KeycloakSession session, long cacheTtlSeconds, boolean legacyPathLayout) {
         this.session = session;
         this.cacheTtl = Duration.ofSeconds(cacheTtlSeconds);
+        this.legacyPathLayout = legacyPathLayout;
     }
 
     /**
@@ -126,9 +146,6 @@ public class DidWebResolver implements DidResolver {
             throw new DidResolutionException("Invalid did:web identifier: missing identifier");
         }
 
-        // Decode percent-encoding in the DID identifier
-        didWebId = URLDecoder.decode(didWebId, StandardCharsets.UTF_8);
-
         // Transform to HTTPS URL
         String url = transformToUrl(didWebId);
 
@@ -141,23 +158,26 @@ public class DidWebResolver implements DidResolver {
         CacheEntry cached = cache.get(did);
         if (cached != null && cached.isValid()) {
             LOG.debugf("Using cached DID document for %s", did);
-            return filterByKeyId(cached.verifiers, keyId);
+            return selectByKeyId(cached.assertionKeys, did, keyId);
         }
 
         // Fetch DID document
         String json = fetchDidDocument(url);
         DidDocument didDoc = parseDidDocument(json);
-
-        // Convert verification methods to SignatureVerifierContexts
-        List<SignatureVerifierContext> verifiers = extractVerifiers(didDoc);
-
-        // Cache the result
-        if (!verifiers.isEmpty()) {
-            cache.put(did, new CacheEntry(verifiers, Instant.now().plus(cacheTtl)));
-            LOG.debugf("Cached %d verification contexts for DID %s", verifiers.size(), did);
+        if (!did.equals(didDoc.getId())) {
+            throw new DidResolutionException("DID document id " + didDoc.getId() + " does not match " + did);
         }
 
-        return filterByKeyId(verifiers, keyId);
+        // Only assertionMethod keys may sign credentials
+        Map<String, SignatureVerifierContext> assertionKeys = extractAssertionKeys(didDoc, did);
+
+        // Cache the result
+        if (!assertionKeys.isEmpty()) {
+            cache.put(did, new CacheEntry(assertionKeys, Instant.now().plus(cacheTtl)));
+            LOG.debugf("Cached %d assertion keys for DID %s", assertionKeys.size(), did);
+        }
+
+        return selectByKeyId(assertionKeys, did, keyId);
     }
 
     /**
@@ -174,14 +194,40 @@ public class DidWebResolver implements DidResolver {
      * @param didWebId the did:web identifier without the {@code did:web:} prefix
      * @return the HTTPS URL where the DID document should be hosted
      */
-    private String transformToUrl(String didWebId) {
-        String[] parts = didWebId.split(":");
-        if (parts.length == 1) {
-            return "https://" + parts[0] + WELL_KNOWN_PATH;
+    String transformToUrl(String didWebId) {
+        if (legacyPathLayout) {
+            String[] parts = URLDecoder.decode(didWebId, StandardCharsets.UTF_8).split(":");
+            if (parts.length == 1) {
+                return "https://" + parts[0] + WELL_KNOWN_PATH;
+            }
+            String path = String.join("/", Arrays.copyOfRange(parts, 1, parts.length));
+            return "https://" + parts[0] + "/" + path + WELL_KNOWN_PATH;
         }
-        String host = parts[0];
-        String path = String.join("/", Arrays.copyOfRange(parts, 1, parts.length));
-        return "https://" + host + "/" + path + WELL_KNOWN_PATH;
+
+        // did:web spec: split on ':' first, then percent-decode each part, so an encoded port
+        // (%3A) stays part of the host.
+        String[] parts = didWebId.split(":", -1);
+        String host = URLDecoder.decode(parts[0], StandardCharsets.UTF_8);
+        if (!host.matches("[A-Za-z0-9.-]+(:[0-9]{1,5})?")) {
+            throw new DidResolutionException("Invalid did:web host: " + host);
+        }
+        if (parts.length == 1) {
+            return "https://" + host + WELL_KNOWN_PATH;
+        }
+        StringBuilder path = new StringBuilder();
+        for (int i = 1; i < parts.length; i++) {
+            String segment = URLDecoder.decode(parts[i], StandardCharsets.UTF_8);
+            if (segment.isEmpty()
+                    || segment.equals(".")
+                    || segment.equals("..")
+                    || segment.contains("/")
+                    || segment.contains("?")
+                    || segment.contains("#")) {
+                throw new DidResolutionException("Invalid did:web path segment: " + segment);
+            }
+            path.append('/').append(parts[i]);
+        }
+        return "https://" + host + path + "/did.json";
     }
 
     /**
@@ -196,6 +242,7 @@ public class DidWebResolver implements DidResolver {
             LOG.debugf("Fetching DID document from %s", url);
             String response = SimpleHttp.doGet(url, session)
                     .header("Accept", "application/did+json,application/json")
+                    .setMaxConsumedResponseSize(MAX_DID_DOCUMENT_BYTES)
                     .asString();
             LOG.debugf("Successfully fetched DID document from %s (length: %d chars)", url, response.length());
             return response;
@@ -221,64 +268,74 @@ public class DidWebResolver implements DidResolver {
     }
 
     /**
-     * Extracts {@link SignatureVerifierContext} instances from all verification methods in the DID
-     * document.
-     *
-     * @param didDoc the DID document
-     * @return list of signature verifier contexts for all verification methods
+     * Returns the verifier contexts of the document's {@code assertionMethod} keys, keyed by their
+     * absolute verification method ID. References may be relative ({@code #key-1}) or absolute;
+     * embedded methods are supported. Methods controlled by another DID are skipped.
      */
-    private List<SignatureVerifierContext> extractVerifiers(DidDocument didDoc) {
-        List<SignatureVerifierContext> verifiers = new ArrayList<>();
-        List<DidDocument.VerificationMethod> methods = didDoc.getVerificationMethod();
-
-        LOG.debugf(
-                "Extracting verifiers from DID document %s with %d verification methods",
-                didDoc.getId(), methods != null ? methods.size() : 0);
-
-        if (methods == null || methods.isEmpty()) {
-            LOG.warnf("DID document %s has no verification methods", didDoc.getId());
-            return verifiers;
-        }
-
-        for (DidDocument.VerificationMethod vm : methods) {
-            Map<String, Object> publicKeyJwk = vm.getPublicKeyJwk();
-            String publicKeyMultibase = vm.getPublicKeyMultibase();
-
-            // Try publicKeyJwk first, then fall back to publicKeyMultibase
-            if (publicKeyJwk == null || publicKeyJwk.isEmpty()) {
-                if (publicKeyMultibase != null && !publicKeyMultibase.isEmpty()) {
-                    LOG.debugf(
-                            "Converting publicKeyMultibase to JWK for verification method %s (type: %s)",
-                            vm.getId(), vm.getType());
-                    try {
-                        publicKeyJwk = multibaseToJwk(publicKeyMultibase, vm.getType());
-                    } catch (Exception e) {
-                        LOG.warnf(
-                                "Failed to convert publicKeyMultibase for verification method %s: %s",
-                                vm.getId(), e.getMessage());
-                        continue;
-                    }
-                } else {
-                    LOG.warnf(
-                            "Skipping verification method %s: no publicKeyJwk or publicKeyMultibase (type: %s)",
-                            vm.getId(), vm.getType());
+    @SuppressWarnings("unchecked")
+    Map<String, SignatureVerifierContext> extractAssertionKeys(DidDocument didDoc, String did) {
+        Map<String, SignatureVerifierContext> keys = new LinkedHashMap<>();
+        for (Object entry : didDoc.getAssertionMethod()) {
+            DidDocument.VerificationMethod vm;
+            if (entry instanceof String reference) {
+                String absolute = absoluteMethodId(did, reference);
+                vm = didDoc.getVerificationMethod().stream()
+                        .filter(candidate -> absolute.equals(absoluteMethodId(did, candidate.getId())))
+                        .findFirst()
+                        .orElse(null);
+                if (vm == null) {
+                    LOG.warnf("assertionMethod %s of %s has no matching verification method", reference, did);
                     continue;
                 }
+            } else if (entry instanceof Map<?, ?> embedded) {
+                vm = JsonSerialization.mapper.convertValue(embedded, DidDocument.VerificationMethod.class);
+            } else if (entry instanceof DidDocument.VerificationMethod embeddedMethod) {
+                vm = embeddedMethod;
+            } else {
+                continue;
             }
 
-            try {
-                SignatureVerifierContext ctx = jwkToVerifierContext(publicKeyJwk);
-                verifiers.add(ctx);
-                LOG.debugf("Added verifier for key %s (type: %s)", vm.getId(), vm.getType());
-            } catch (Exception e) {
-                LOG.warnf(
-                        "Failed to convert verification method %s to verifier context: %s", vm.getId(), e.getMessage());
+            if (vm.getId() == null) {
+                continue;
+            }
+            if (vm.getController() != null && !did.equals(vm.getController())) {
+                LOG.warnf("Skipping %s: controlled by %s, not %s", vm.getId(), vm.getController(), did);
+                continue;
+            }
+            SignatureVerifierContext ctx = toVerifierContext(vm);
+            if (ctx != null) {
+                keys.put(absoluteMethodId(did, vm.getId()), ctx);
             }
         }
+        if (keys.isEmpty()) {
+            LOG.warnf("DID document %s has no usable assertionMethod keys", did);
+        }
+        return keys;
+    }
 
-        LOG.debugf("Extracted %d verifiers from DID document %s", verifiers.size(), didDoc.getId());
+    private SignatureVerifierContext toVerifierContext(DidDocument.VerificationMethod vm) {
+        Map<String, Object> publicKeyJwk = vm.getPublicKeyJwk();
+        String publicKeyMultibase = vm.getPublicKeyMultibase();
+        try {
+            if (publicKeyJwk == null || publicKeyJwk.isEmpty()) {
+                if (publicKeyMultibase == null || publicKeyMultibase.isEmpty()) {
+                    LOG.warnf("Skipping verification method %s: no public key", vm.getId());
+                    return null;
+                }
+                publicKeyJwk = multibaseToJwk(publicKeyMultibase, vm.getType());
+            }
+            return jwkToVerifierContext(publicKeyJwk);
+        } catch (Exception e) {
+            LOG.warnf("Failed to convert verification method %s: %s", vm.getId(), e.getMessage());
+            return null;
+        }
+    }
 
-        return verifiers;
+    static String absoluteMethodId(String did, String methodId) {
+        if (methodId == null) return null;
+        if (methodId.startsWith("#")) return did + methodId;
+        if (methodId.startsWith("did:")) return methodId;
+        return did + "#" + methodId;
     }
 
     /**
@@ -411,14 +468,26 @@ public class DidWebResolver implements DidResolver {
      * @param keyId the key ID to filter by, or {@code null} to return all
      * @return filtered list of verifiers
      */
-    private List<SignatureVerifierContext> filterByKeyId(List<SignatureVerifierContext> verifiers, String keyId) {
-        return verifiers;
+    /**
+     * Returns the keys a credential may be verified with: all assertion keys without a {@code kid},
+     * otherwise only the key the {@code kid} names. An unknown {@code kid} rejects resolution.
+     */
+    private List<SignatureVerifierContext> selectByKeyId(
+            Map<String, SignatureVerifierContext> assertionKeys, String did, String keyId) {
+        if (keyId == null || keyId.isBlank()) {
+            return List.copyOf(assertionKeys.values());
+        }
+        SignatureVerifierContext key = assertionKeys.get(absoluteMethodId(did, keyId));
+        if (key == null) {
+            throw new DidResolutionException("kid " + keyId + " is not an assertionMethod key of " + did);
+        }
+        return List.of(key);
     }
 
     /**
      * Cache entry holding verification contexts with expiration time.
      */
-    private record CacheEntry(List<SignatureVerifierContext> verifiers, Instant expiresAt) {
+    private record CacheEntry(Map<String, SignatureVerifierContext> assertionKeys, Instant expiresAt) {
         boolean isValid() {
             return Instant.now().isBefore(expiresAt);
         }

@@ -83,6 +83,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String DID_RESOLUTION_ENABLED = "didResolutionEnabled";
     public static final String ALLOWED_DID_METHODS = "allowedDidMethods";
     public static final String DID_CACHE_TTL_SECONDS = "didCacheTtlSeconds";
+    public static final String DID_WEB_LEGACY_PATH_LAYOUT = "didWebLegacyPathLayout";
     public static final int DEFAULT_DID_CACHE_TTL_SECONDS = 3600;
 
     public static final String CROSS_DEVICE_POLL_INTERVAL_MS = "crossDevicePollIntervalMs";
@@ -496,6 +497,15 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public void setAllowedDidMethods(String methods) {
         getConfig().put(ALLOWED_DID_METHODS, methods);
+    }
+
+    /** Resolve did:web path DIDs with the pre-0.2 non-standard layout ({@code /<path>/.well-known/did.json}). */
+    public boolean isDidWebLegacyPathLayout() {
+        return getBoolConfig(DID_WEB_LEGACY_PATH_LAYOUT, false);
+    }
+
+    public void setDidWebLegacyPathLayout(boolean legacy) {
+        getConfig().put(DID_WEB_LEGACY_PATH_LAYOUT, String.valueOf(legacy));
     }
 
     public int getDidCacheTtlSeconds() {

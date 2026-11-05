@@ -14,9 +14,16 @@ public final class ConfiguredDidResolver implements DidResolver {
     private final List<DidResolver> resolvers;
 
     public ConfiguredDidResolver(KeycloakSession session, String methods, long cacheTtlSeconds) {
+        this(session, methods, cacheTtlSeconds, false);
+    }
+
+    public ConfiguredDidResolver(
+            KeycloakSession session, String methods, long cacheTtlSeconds, boolean didWebLegacyPathLayout) {
         this(
                 methods,
-                List.of(new DidWebResolver(session, cacheTtlSeconds), new DidWebVhResolver(session, cacheTtlSeconds)));
+                List.of(
+                        new DidWebResolver(session, cacheTtlSeconds, didWebLegacyPathLayout),
+                        new DidWebVhResolver(session, cacheTtlSeconds)));
     }
 
     ConfiguredDidResolver(String methods, List<DidResolver> resolvers) {

@@ -184,9 +184,12 @@ DID issuer verification is opt-in and is independent of the verifier certificate
 | `didCacheTtlSeconds` | Lifetime of entries in each resolver instance's in-memory cache. | `3600` |
 | `allowedDidMethods` | Enforced comma-separated method list: `did:web`, `did:webvh`, or both. | `did:web` |
 | `allowedIssuers` | Existing SD-JWT issuer policy. Use explicit issuer DIDs for restricted deployments. | Existing wildcard policy |
+| `didWebLegacyPathLayout` | Compatibility only: resolve path DIDs from `<path>/.well-known/did.json` as releases up to `0.1.0-rc.1` did. | `false` |
 
-The deployed resolver fetches a host DID from `https://issuer.example/.well-known/did.json`. It currently fetches a path DID such as `did:web:issuer.example:tenant` from `https://issuer.example/tenant/.well-known/did.json`. That path behavior differs from the standard `/tenant/did.json` layout and is preserved for compatibility. Encoded-port handling also needs a migration review.
+The resolver follows the did:web layout: a host DID resolves to `https://issuer.example/.well-known/did.json`, a path DID such as `did:web:issuer.example:tenant` to `https://issuer.example/tenant/did.json`, and an encoded port (`did:web:issuer.example%3A8443`) to `https://issuer.example:8443/.well-known/did.json`. Releases up to `0.1.0-rc.1` fetched path DIDs from `<path>/.well-known/did.json`; set `didWebLegacyPathLayout=true` while such issuers migrate. Documents are capped at 256 KiB.
+
+Key authorization: the document `id` must equal the DID, only keys referenced in `assertionMethod` (by relative or absolute ID, or embedded) are eligible, a method whose `controller` is another DID is skipped, and a JOSE `kid` must name one of the eligible keys. Without a `kid`, all eligible keys are tried.
 
 The resolver supports JWK public keys including EC and Ed25519. Its multibase implementation accepts only the specific Ed25519 forms implemented in `DidWebResolver`; do not assume all multibase/multicodec documents are supported.
 
-Current `did:web` limitations: `kid` filtering, document identity/controller validation, and assertion-method authorization are not enforced by this compatibility resolver. The separate `did:webvh` resolver enforces those checks. DID resolution precedes strict X.509 handling, so enabling it is not a claim of HAIP conformance. Use `enforceHaip=false` for the existing DID flow and review the [readiness plan](enterprise-readiness.md) before changing trust policy.
+DID resolution precedes strict X.509 handling, so enabling it is not a claim of HAIP conformance. Use `enforceHaip=false` for the existing DID flow and review the [readiness plan](enterprise-readiness.md) before changing trust policy.

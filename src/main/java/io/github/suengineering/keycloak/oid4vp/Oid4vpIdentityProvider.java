@@ -93,8 +93,11 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
 
         DidResolver didResolver = null;
         if (config.isDidResolutionEnabled()) {
-            didResolver =
-                    new ConfiguredDidResolver(session, config.getAllowedDidMethods(), config.getDidCacheTtlSeconds());
+            didResolver = new ConfiguredDidResolver(
+                    session,
+                    config.getAllowedDidMethods(),
+                    config.getDidCacheTtlSeconds(),
+                    config.isDidWebLegacyPathLayout());
         }
 
         this.callbackProcessor = new Oid4vpCallbackProcessor(

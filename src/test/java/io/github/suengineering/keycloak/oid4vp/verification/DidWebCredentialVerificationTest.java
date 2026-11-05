@@ -146,6 +146,8 @@ class DidWebCredentialVerificationTest {
         KeycloakSession session = mock(KeycloakSession.class);
         SimpleHttp http = mock(SimpleHttp.class);
         when(http.header("Accept", "application/did+json,application/json")).thenReturn(http);
+        when(http.setMaxConsumedResponseSize(DidWebResolver.MAX_DID_DOCUMENT_BYTES))
+                .thenReturn(http);
         when(http.asString()).thenReturn(document);
         try (var requests = mockStatic(SimpleHttp.class)) {
             requests.when(() -> SimpleHttp.doGet("https://issuer.example/.well-known/did.json", session))

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Breaking:** did:web key authorization. The DID document `id` must equal the DID, only `assertionMethod` keys controlled by the DID may sign credentials, and a JOSE `kid` must name one of them.
+- **Breaking:** did:web URLs follow the did:web specification. Path DIDs resolve to `<path>/did.json` and encoded ports (`%3A`) stay in the host. Set `didWebLegacyPathLayout=true` to keep the previous `<path>/.well-known/did.json` layout. DID documents are capped at 256 KiB.
 - **Breaking:** a configured trust list must be signed. Without `trustListSigningCertPem` the trust list is now rejected instead of being trusted as fetched. The new `trustListAllowUnsigned` option restores the old behaviour for local testing only.
 - Correct the Admin Console help text: the trust list is an ETSI TS 119 602 List of Trusted Entities in its JSON/JWT binding, not a TS 119 612 XML trusted list, and an empty Trust List URL does not skip signature verification.
 - Token Status List signatures are always verified. Trust comes from the trust list's revocation services, otherwise its issuance services, otherwise the keys that verified the referenced credential (for example a did:web issuer). A token that none of these can verify is rejected. Cached lists verified with one issuer's own key are not reused for other issuers.
