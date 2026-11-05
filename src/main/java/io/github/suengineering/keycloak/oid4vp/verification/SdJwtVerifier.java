@@ -255,13 +255,18 @@ public class SdJwtVerifier {
         return claim instanceof String string ? string : claim.toString();
     }
 
+    /**
+     * A key published in issuer metadata is accepted only when its certificate chain is anchored
+     * in the configured trust material. Issuers without a PKI should use
+     * did:web or did:webvh with an explicit issuer allowlist instead.
+     */
     private void validateResolvedKeyTrust(ResolvedIssuerKey issuerKey, List<X509Certificate> trustedCertificates) {
         if (trustedCertificates == null || trustedCertificates.isEmpty()) {
-            return;
+            throw new IllegalStateException("Issuer metadata key cannot be trusted: no trust anchors configured");
         }
         List<X509Certificate> chain = issuerKey.certificateChain();
         if (chain.isEmpty()) {
-            return;
+            throw new IllegalStateException("Issuer metadata key has no x5c certificate chain to anchor it");
         }
         try {
             PublicKey validatedLeafKey = X5cChainValidator.validateCertChain(chain, trustedCertificates);

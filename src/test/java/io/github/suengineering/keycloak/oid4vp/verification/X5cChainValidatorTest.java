@@ -202,6 +202,84 @@ class X5cChainValidatorTest {
                 .hasMessageContaining("not a CA certificate");
     }
 
+    @Test
+    void validateCertChain_expiredTrustAnchor_doesNotAnchor() throws Exception {
+        X509Certificate expiredCa = generateCert(
+                caKeyPair,
+                caKeyPair,
+                "CN=Test CA",
+                "CN=Test CA",
+                Instant.now().minus(10, ChronoUnit.DAYS),
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                true);
+        KeyPair leafKp = generateKeyPair();
+        X509Certificate leafCert = generateCert(
+                leafKp,
+                caKeyPair,
+                "CN=Leaf",
+                "CN=Test CA",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+
+        assertThatThrownBy(() -> X5cChainValidator.validateCertChain(List.of(leafCert), List.of(expiredCa)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not anchored");
+    }
+
+    @Test
+    void validateCertChain_nonCaTrustedCertificate_cannotIssueOtherCertificates() throws Exception {
+        KeyPair trustedEndEntityKp = generateKeyPair();
+        X509Certificate trustedEndEntity = generateCert(
+                trustedEndEntityKp,
+                trustedEndEntityKp,
+                "CN=Trusted End Entity",
+                "CN=Trusted End Entity",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+        KeyPair leafKp = generateKeyPair();
+        X509Certificate leafCert = generateCert(
+                leafKp,
+                trustedEndEntityKp,
+                "CN=Leaf",
+                "CN=Trusted End Entity",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+
+        assertThatThrownBy(() -> X5cChainValidator.validateCertChain(List.of(leafCert), List.of(trustedEndEntity)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not anchored");
+        assertThat(X5cChainValidator.validateCertChain(List.of(trustedEndEntity), List.of(trustedEndEntity)))
+                .isEqualTo(trustedEndEntity.getPublicKey());
+    }
+
+    @Test
+    void verifyJwtSignature_invalidX5c_isNotRetriedAgainstTrustedKeys() throws Exception {
+        KeyPair otherKp = generateKeyPair();
+        X509Certificate untrusted = generateCert(
+                otherKp,
+                otherKp,
+                "CN=Untrusted",
+                "CN=Untrusted",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+        // Signed with the trusted CA key, but presenting a chain that does not validate.
+        com.nimbusds.jose.JWSObject jws = new com.nimbusds.jose.JWSObject(
+                new com.nimbusds.jose.JWSHeader.Builder(com.nimbusds.jose.JWSAlgorithm.ES256)
+                        .x509CertChain(List.of(com.nimbusds.jose.util.Base64.encode(untrusted.getEncoded())))
+                        .build(),
+                new com.nimbusds.jose.Payload("{\"sub\":\"x\"}"));
+        jws.sign(new com.nimbusds.jose.crypto.ECDSASigner(
+                (java.security.interfaces.ECPrivateKey) caKeyPair.getPrivate()));
+
+        assertThatThrownBy(() -> X5cChainValidator.verifyJwtSignature(jws.serialize(), List.of(caCert)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("x5c chain validation failed");
+    }
+
     private static KeyPair generateKeyPair() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
         kpg.initialize(new ECGenParameterSpec("secp256r1"));

@@ -89,18 +89,21 @@ public class MdocVerifier {
             CBORPairList document = parseDocument(decodeBase64(deviceResponseToken));
             CBORPairList mso = parseMso(document);
 
-            String docType = str(document, "docType");
-            if (docType == null) docType = mso != null ? str(mso, "docType") : null;
-            if (docType == null) docType = "mso_mdoc";
-
-            if (mso != null && !docType.equals(str(mso, "docType"))) {
+            if (mso == null) {
+                throw new IllegalStateException("Missing or unreadable MobileSecurityObject");
+            }
+            String docType = str(mso, "docType");
+            if (StringUtil.isBlank(docType)) {
+                throw new IllegalStateException("Signed MSO has no docType");
+            }
+            String documentDocType = str(document, "docType");
+            if (documentDocType != null && !docType.equals(documentDocType)) {
                 throw new IllegalStateException("Document docType does not match signed MSO");
             }
             if ((clientId != null || nonce != null || responseUri != null)
                     && (clientId == null
                             || nonce == null
                             || responseUri == null
-                            || mso == null
                             || val(document, "deviceSigned") == null)) {
                 throw new IllegalStateException(
                         "mDoc presentation requires device authentication and complete session context");
@@ -108,13 +111,11 @@ public class MdocVerifier {
             Map<String, Object> claims = extractClaims(document, mso);
             verifyIssuerSignature(document, trustedCertificates);
 
-            if (mso != null) {
-                validateValidity(mso);
-                verifyDigests(mso, document);
-                if (clientId != null && nonce != null && responseUri != null && val(document, "deviceSigned") != null) {
-                    verifyDeviceAuth(
-                            document, mso, docType, clientId, nonce, responseUri, mdocGeneratedNonce, jwkThumbprint);
-                }
+            validateValidity(mso);
+            verifyDigests(mso, document);
+            if (clientId != null && nonce != null && responseUri != null && val(document, "deviceSigned") != null) {
+                verifyDeviceAuth(
+                        document, mso, docType, clientId, nonce, responseUri, mdocGeneratedNonce, jwkThumbprint);
             }
 
             return new MdocVerificationResult(claims, docType);
@@ -220,19 +221,17 @@ public class MdocVerifier {
         try {
             COSESign1 sign1 = buildCoseSign1(issuerAuth);
 
+            // ISO/IEC 18013-5 9.1.2.4: issuerAuth carries the document signer certificate in x5chain.
+            // The chain must validate against the trust anchors; there is no fallback to trying
+            // trusted keys directly, which would ignore the chain's validity and CA constraints.
             List<X509Certificate> x5chain = extractX5Chain(sign1);
-            if (x5chain != null && !x5chain.isEmpty()) {
-                PublicKey leafKey = X5cChainValidator.validateCertChain(x5chain, trustedCertificates);
-                if (leafKey != null && new COSEVerifier(leafKey).verify(sign1)) return;
+            if (x5chain == null || x5chain.isEmpty()) {
+                throw new IllegalStateException("issuerAuth has no x5chain");
             }
-
-            for (X509Certificate cert : trustedCertificates) {
-                try {
-                    if (new COSEVerifier(cert.getPublicKey()).verify(sign1)) return;
-                } catch (Exception ignored) {
-                }
+            PublicKey leafKey = X5cChainValidator.validateCertChain(x5chain, trustedCertificates);
+            if (!new COSEVerifier(leafKey).verify(sign1)) {
+                throw new IllegalStateException("issuerAuth signature does not verify with the document signer key");
             }
-            throw new IllegalStateException("No trusted key matched");
         } catch (Exception e) {
             throw wrapIfNeeded(e, "Issuer signature verification failed: ");
         }
@@ -338,17 +337,21 @@ public class MdocVerifier {
     }
 
     private void verifyDigests(CBORPairList mso, CBORPairList document) {
-        CBORPairList valueDigests = map(mso, "valueDigests");
         CBORPairList nameSpaces = map(map(document, "issuerSigned"), "nameSpaces");
-        if (valueDigests == null || nameSpaces == null) return;
+        if (nameSpaces == null || nameSpaces.getPairs().isEmpty()) return;
+        CBORPairList valueDigests = map(mso, "valueDigests");
+        if (valueDigests == null) {
+            throw new IllegalStateException("MSO has no valueDigests for disclosed namespaces");
+        }
 
         try {
-            MessageDigest sha256 = MessageDigest.getInstance(JavaAlgorithm.SHA256);
+            MessageDigest digest = MessageDigest.getInstance(javaDigestAlgorithm(str(mso, "digestAlgorithm")));
             for (var nsPair : nameSpaces.getPairs()) {
                 String namespace = stringValue(nsPair.getKey());
-                if (namespace != null && nsPair.getValue() instanceof CBORItemList elements) {
-                    verifyNamespaceDigests(valueDigests, namespace, elements, sha256);
+                if (namespace == null || !(nsPair.getValue() instanceof CBORItemList elements)) {
+                    throw new IllegalStateException("Malformed issuer-signed namespace");
                 }
+                verifyNamespaceDigests(valueDigests, namespace, elements, digest);
             }
         } catch (Exception e) {
             throw wrapIfNeeded(e, "Digest verification failed: ");
@@ -356,43 +359,58 @@ public class MdocVerifier {
     }
 
     private void verifyNamespaceDigests(
-            CBORPairList valueDigests, String namespace, CBORItemList elements, MessageDigest sha256) {
+            CBORPairList valueDigests, String namespace, CBORItemList elements, MessageDigest digest) {
         CBORPairList nsDigests = map(valueDigests, namespace);
         if (nsDigests == null) {
-            return;
+            throw new IllegalStateException("MSO has no digests for namespace " + namespace);
         }
 
         for (CBORItem element : elements.getItems()) {
-            verifyElementDigest(element, nsDigests, sha256);
+            verifyElementDigest(element, nsDigests, digest);
         }
     }
 
-    private void verifyElementDigest(CBORItem element, CBORPairList nsDigests, MessageDigest sha256) {
+    private void verifyElementDigest(CBORItem element, CBORPairList nsDigests, MessageDigest digest) {
         CBORPairList item = unwrapTag24(element);
         CBORItem digestIdValue = item != null ? val(item, "digestID") : null;
         if (digestIdValue == null) {
-            return;
+            throw new IllegalStateException("Issuer-signed item has no digestID");
         }
 
         int digestId = intValue(digestIdValue);
         if (!(intKeyVal(nsDigests, digestId) instanceof CBORByteArray expected)) {
             throw new IllegalStateException("Missing digest for element " + digestId);
         }
-        if (!Arrays.equals(sha256.digest(element.encode()), expected.getValue())) {
+        if (!Arrays.equals(digest.digest(element.encode()), expected.getValue())) {
             throw new IllegalStateException("Digest mismatch for element " + digestId);
         }
     }
 
     private void validateValidity(CBORPairList mso) {
         CBORPairList validityInfo = map(mso, "validityInfo");
-        if (validityInfo == null) return;
+        if (validityInfo == null) throw new IllegalStateException("MSO has no validityInfo");
         Instant now = Instant.now();
 
         Instant validFrom = parseInstant(val(validityInfo, "validFrom"));
-        if (validFrom != null && validFrom.isAfter(now)) throw new IllegalStateException("Credential not yet valid");
+        if (validFrom == null) throw new IllegalStateException("MSO validityInfo has no validFrom");
+        if (validFrom.isAfter(now)) throw new IllegalStateException("Credential not yet valid");
 
         Instant validUntil = parseInstant(val(validityInfo, "validUntil"));
-        if (validUntil != null && validUntil.isBefore(now)) throw new IllegalStateException("Credential expired");
+        if (validUntil == null) throw new IllegalStateException("MSO validityInfo has no validUntil");
+        if (validUntil.isBefore(now)) throw new IllegalStateException("Credential expired");
+    }
+
+    /** Maps the MSO digestAlgorithm (ISO/IEC 18013-5 9.1.2.5) to a JCA name; unknown values fail. */
+    static String javaDigestAlgorithm(String msoDigestAlgorithm) {
+        if (msoDigestAlgorithm == null) {
+            throw new IllegalStateException("MSO has no digestAlgorithm");
+        }
+        return switch (msoDigestAlgorithm) {
+            case "SHA-256" -> JavaAlgorithm.SHA256;
+            case "SHA-384" -> JavaAlgorithm.SHA384;
+            case "SHA-512" -> JavaAlgorithm.SHA512;
+            default -> throw new IllegalStateException("Unsupported MSO digestAlgorithm: " + msoDigestAlgorithm);
+        };
     }
 
     private Instant parseInstant(CBORItem value) {

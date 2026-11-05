@@ -62,6 +62,8 @@ class MdocVerifierTest {
     private KeyPair signingKeyPair;
     private X509Certificate signingCert;
 
+    private boolean omitX5chain;
+
     @BeforeEach
     void setUp() throws Exception {
         verifier = new MdocVerifier();
@@ -118,6 +120,79 @@ class MdocVerifierTest {
         assertThat(result.claims()).containsEntry("org.iso.18013.5.1/family_name", "Doe");
     }
 
+    @Nested
+    class IssuerAuthHardening {
+
+        private final String[] givenName = {"given_name", "John"};
+
+        private CBORPairList nameSpaces() {
+            return new CBORPairList(
+                    List.of(new CBORPair(new CBORString("org.iso.18013.5.1"), buildElements(givenName))));
+        }
+
+        private CBORPairList baseMso(CBORPair... extra) {
+            java.util.List<CBORPair> pairs = new java.util.ArrayList<>(List.of(
+                    new CBORPair(new CBORString("docType"), new CBORString("org.iso.18013.5.1.mDL")),
+                    new CBORPair(new CBORString("version"), new CBORString("1.0"))));
+            pairs.addAll(List.of(extra));
+            return new CBORPairList(pairs);
+        }
+
+        @Test
+        void issuerAuthWithoutX5chain_isRejectedEvenWhenSignedByTrustedKey() throws Exception {
+            omitX5chain = true;
+            String token = buildSignedMdoc("org.iso.18013.5.1.mDL", "org.iso.18013.5.1", givenName);
+
+            assertThatThrownBy(() -> verifier.verifyWithTrustedCerts(token, List.of(signingCert)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("x5chain");
+        }
+
+        @Test
+        void unknownDigestAlgorithm_isRejected() throws Exception {
+            String token = buildSignedMdocWithMso(
+                    "org.iso.18013.5.1.mDL",
+                    nameSpaces(),
+                    baseMso(new CBORPair(new CBORString("digestAlgorithm"), new CBORString("MD5"))));
+
+            assertThatThrownBy(() -> verifier.verifyWithTrustedCerts(token, List.of(signingCert)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Unsupported MSO digestAlgorithm");
+        }
+
+        @Test
+        void disclosedNamespaceWithoutDigests_isRejected() throws Exception {
+            String token = buildSignedMdocWithMso(
+                    "org.iso.18013.5.1.mDL",
+                    nameSpaces(),
+                    baseMso(new CBORPair(new CBORString("valueDigests"), new CBORPairList(List.of()))));
+
+            assertThatThrownBy(() -> verifier.verifyWithTrustedCerts(token, List.of(signingCert)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("no digests for namespace");
+        }
+
+        @Test
+        void validityInfoWithoutValidUntil_isRejected() throws Exception {
+            CBORPairList validity = new CBORPairList(List.of(new CBORPair(
+                    new CBORString("validFrom"),
+                    new CBORTaggedItem(
+                            0,
+                            new CBORString(Instant.now()
+                                    .minus(1, ChronoUnit.DAYS)
+                                    .truncatedTo(ChronoUnit.SECONDS)
+                                    .toString())))));
+            String token = buildSignedMdocWithMso(
+                    "org.iso.18013.5.1.mDL",
+                    nameSpaces(),
+                    baseMso(new CBORPair(new CBORString("validityInfo"), validity)));
+
+            assertThatThrownBy(() -> verifier.verifyWithTrustedCerts(token, List.of(signingCert)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("validUntil");
+        }
+    }
+
     @Test
     void verify_emptyDocumentsArray_throws() {
         CBORPairList root = new CBORPairList(List.of(new CBORPair(new CBORString("documents"), new CBORItemList())));
@@ -156,7 +231,7 @@ class MdocVerifierTest {
 
         assertThatThrownBy(() -> verifier.verifyWithTrustedCerts(token, List.of()))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("No trusted keys available");
+                .hasMessageContaining("MobileSecurityObject");
     }
 
     @Test
@@ -264,7 +339,73 @@ class MdocVerifierTest {
         return buildSignedMdocWithMso(docType, nameSpaces, mso);
     }
 
+    /**
+     * Turns test name spaces and a partial MSO into an ISO/IEC 18013-5 shaped pair: every
+     * IssuerSignedItem gets a digestID and random salt and is tag-24 wrapped, and the MSO gains
+     * digestAlgorithm, valueDigests and validityInfo unless the test already supplied them.
+     */
+    private CBORPairList[] completeMso(CBORPairList nameSpaces, CBORPairList mso) throws Exception {
+        java.security.MessageDigest sha256 = java.security.MessageDigest.getInstance("SHA-256");
+        java.util.List<CBORPair> wrappedNamespaces = new java.util.ArrayList<>();
+        java.util.List<CBORPair> digestNamespaces = new java.util.ArrayList<>();
+        int digestId = 0;
+        for (CBORPair ns : nameSpaces.getPairs()) {
+            java.util.List<com.authlete.cbor.CBORItem> wrapped = new java.util.ArrayList<>();
+            java.util.List<CBORPair> digests = new java.util.ArrayList<>();
+            for (com.authlete.cbor.CBORItem element : ((CBORItemList) ns.getValue()).getItems()) {
+                java.util.List<CBORPair> fields = new java.util.ArrayList<>();
+                fields.add(new CBORPair(new CBORString("digestID"), new CBORInteger(digestId)));
+                fields.add(
+                        new CBORPair(new CBORString("random"), new CBORByteArray(new byte[] {(byte) digestId, 1, 2})));
+                fields.addAll(((CBORPairList) element).getPairs());
+                CBORTaggedItem item = new CBORTaggedItem(24, new CBORByteArray(new CBORPairList(fields).encode()));
+                wrapped.add(item);
+                digests.add(new CBORPair(new CBORInteger(digestId), new CBORByteArray(sha256.digest(item.encode()))));
+                digestId++;
+            }
+            wrappedNamespaces.add(new CBORPair(ns.getKey(), new CBORItemList(wrapped)));
+            digestNamespaces.add(new CBORPair(ns.getKey(), new CBORPairList(digests)));
+        }
+        java.util.List<CBORPair> msoPairs = new java.util.ArrayList<>(mso.getPairs());
+        java.util.Set<String> present = new java.util.HashSet<>();
+        for (CBORPair pair : msoPairs) present.add(pair.getKey().toString().replace("\"", ""));
+        if (!present.contains("digestAlgorithm")) {
+            msoPairs.add(new CBORPair(new CBORString("digestAlgorithm"), new CBORString("SHA-256")));
+        }
+        if (!present.contains("valueDigests")) {
+            msoPairs.add(new CBORPair(new CBORString("valueDigests"), new CBORPairList(digestNamespaces)));
+        }
+        if (!present.contains("validityInfo")) {
+            Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+            msoPairs.add(new CBORPair(
+                    new CBORString("validityInfo"),
+                    new CBORPairList(List.of(
+                            new CBORPair(
+                                    new CBORString("signed"),
+                                    new CBORTaggedItem(
+                                            0,
+                                            new CBORString(now.minus(1, ChronoUnit.DAYS)
+                                                    .toString()))),
+                            new CBORPair(
+                                    new CBORString("validFrom"),
+                                    new CBORTaggedItem(
+                                            0,
+                                            new CBORString(now.minus(1, ChronoUnit.DAYS)
+                                                    .toString()))),
+                            new CBORPair(
+                                    new CBORString("validUntil"),
+                                    new CBORTaggedItem(
+                                            0,
+                                            new CBORString(now.plus(30, ChronoUnit.DAYS)
+                                                    .toString())))))));
+        }
+        return new CBORPairList[] {new CBORPairList(wrappedNamespaces), new CBORPairList(msoPairs)};
+    }
+
     private String buildSignedMdocWithMso(String docType, CBORPairList nameSpaces, CBORPairList mso) throws Exception {
+        CBORPairList[] completed = completeMso(nameSpaces, mso);
+        nameSpaces = completed[0];
+        mso = completed[1];
         // Tag-24 wrap the MSO
         byte[] msoBytes = mso.encode();
         byte[] payload = new CBORTaggedItem(24, new CBORByteArray(msoBytes)).encode();
@@ -272,8 +413,11 @@ class MdocVerifierTest {
         // Build and sign COSE_Sign1
         var protectedHeader =
                 new COSEProtectedHeaderBuilder().alg(COSE_ALG_ES256).build();
-        var unprotectedHeader =
-                new COSEUnprotectedHeaderBuilder().x5chain(List.of(signingCert)).build();
+        var unprotectedHeader = omitX5chain
+                ? new COSEUnprotectedHeaderBuilder().build()
+                : new COSEUnprotectedHeaderBuilder()
+                        .x5chain(List.of(signingCert))
+                        .build();
 
         var sigStructure = new SigStructureBuilder()
                 .signature1()
