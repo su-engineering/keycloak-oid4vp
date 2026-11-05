@@ -447,4 +447,199 @@ class StatusListVerifierTest {
         wrapper.setCurve("P-256");
         return org.keycloak.util.KeyWrapperUtil.createSignatureVerifierContext(wrapper);
     }
+
+    @org.junit.jupiter.api.Nested
+    class CwtStatusList {
+
+        private static final String URI = "https://issuer.example/status/1";
+        private java.security.KeyPair caKeys;
+        private java.security.cert.X509Certificate caCert;
+        private java.security.KeyPair signerKeys;
+        private java.security.cert.X509Certificate signerCert;
+
+        @org.junit.jupiter.api.BeforeEach
+        void setUpPki() throws Exception {
+            org.keycloak.common.crypto.CryptoIntegration.init(getClass().getClassLoader());
+            caKeys = ecKeyPair();
+            caCert = certificate(caKeys, caKeys, "CN=Status CA", "CN=Status CA", true);
+            signerKeys = ecKeyPair();
+            signerCert = certificate(signerKeys, caKeys, "CN=Status Signer", "CN=Status CA", false);
+        }
+
+        private StatusListVerifier verifierTrusting(java.security.cert.X509Certificate... anchors) {
+            return new StatusListVerifier(null, new TrustListProvider(java.util.List.of(anchors)));
+        }
+
+        @Test
+        void acceptsCwtWithAnchoredX5chainAndReadsStatuses() throws Exception {
+            // statuses: index 0 = 0, index 1 = 1 (revoked), with 1 bit per status
+            byte[] cwt = statusListCwt(
+                    StatusListVerifier.STATUS_LIST_CWT_TYPE, URI, deflate(new byte[] {0b0000_0010}), signerKeys, true);
+
+            StatusListVerifier.ParsedStatusList parsed = verifierTrusting(caCert)
+                    .decodeCwtStatusList(cwt, URI, StatusListVerifier.StatusListTrust.trustAnchorsOnly());
+
+            byte[] bits = StatusListVerifier.inflate(parsed.compressed());
+            assertThat(StatusListVerifier.getStatusAtIndex(bits, 0, parsed.bitsPerStatus()))
+                    .isZero();
+            assertThat(StatusListVerifier.getStatusAtIndex(bits, 1, parsed.bitsPerStatus()))
+                    .isEqualTo(1);
+            assertThat(parsed.trustDomain()).isEqualTo("trust-anchors");
+        }
+
+        @Test
+        void acceptsCwtSignedDirectlyByPinnedAnchorWithoutX5chain() throws Exception {
+            byte[] cwt = statusListCwt(
+                    StatusListVerifier.STATUS_LIST_CWT_TYPE, URI, deflate(new byte[] {0}), signerKeys, false);
+
+            assertThat(verifierTrusting(signerCert)
+                            .decodeCwtStatusList(cwt, URI, StatusListVerifier.StatusListTrust.trustAnchorsOnly())
+                            .bitsPerStatus())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void rejectsCwtFromUntrustedSigner() throws Exception {
+            java.security.KeyPair otherKeys = ecKeyPair();
+            byte[] cwt = statusListCwt(
+                    StatusListVerifier.STATUS_LIST_CWT_TYPE, URI, deflate(new byte[] {0}), otherKeys, false);
+
+            assertThatThrownBy(() -> verifierTrusting(caCert)
+                            .decodeCwtStatusList(cwt, URI, StatusListVerifier.StatusListTrust.trustAnchorsOnly()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("not trusted");
+        }
+
+        @Test
+        void rejectsCwtWithWrongTypeOrSubject() throws Exception {
+            byte[] wrongType = statusListCwt("application/cwt", URI, deflate(new byte[] {0}), signerKeys, true);
+            byte[] wrongSub = statusListCwt(
+                    StatusListVerifier.STATUS_LIST_CWT_TYPE,
+                    "https://other.example/status",
+                    deflate(new byte[] {0}),
+                    signerKeys,
+                    true);
+            StatusListVerifier verifier = verifierTrusting(caCert);
+
+            assertThatThrownBy(() -> verifier.decodeCwtStatusList(
+                            wrongType, URI, StatusListVerifier.StatusListTrust.trustAnchorsOnly()))
+                    .hasMessageContaining("typ");
+            assertThatThrownBy(() -> verifier.decodeCwtStatusList(
+                            wrongSub, URI, StatusListVerifier.StatusListTrust.trustAnchorsOnly()))
+                    .hasMessageContaining("sub claim");
+        }
+
+        @Test
+        void acceptsCwtSignedByCredentialIssuerKey() throws Exception {
+            byte[] cwt = statusListCwt(
+                    StatusListVerifier.STATUS_LIST_CWT_TYPE, URI, deflate(new byte[] {0}), signerKeys, false);
+            org.keycloak.crypto.KeyWrapper wrapper = new org.keycloak.crypto.KeyWrapper();
+            wrapper.setPublicKey(signerKeys.getPublic());
+            wrapper.setType(org.keycloak.crypto.KeyType.EC);
+            wrapper.setUse(org.keycloak.crypto.KeyUse.SIG);
+            wrapper.setAlgorithm("ES256");
+            wrapper.setCurve("P-256");
+            StatusListVerifier.StatusListTrust trust = new StatusListVerifier.StatusListTrust(
+                    "did:web:issuer.example",
+                    java.util.List.of(org.keycloak.util.KeyWrapperUtil.createSignatureVerifierContext(wrapper)));
+
+            assertThat(new StatusListVerifier()
+                            .decodeCwtStatusList(cwt, URI, trust)
+                            .trustDomain())
+                    .isEqualTo("issuer:did:web:issuer.example");
+        }
+
+        @Test
+        void detectsCwtByMediaTypeOrBinaryBody() {
+            assertThat(new StatusListVerifier.FetchedStatusList(new byte[] {(byte) 0xd2}, null).isCwt())
+                    .isTrue();
+            assertThat(new StatusListVerifier.FetchedStatusList("eyJhbGc".getBytes(), null).isCwt())
+                    .isFalse();
+            assertThat(new StatusListVerifier.FetchedStatusList("eyJhbGc".getBytes(), "application/statuslist+cwt")
+                            .isCwt())
+                    .isTrue();
+        }
+
+        private byte[] statusListCwt(
+                String typ, String sub, byte[] compressed, java.security.KeyPair signer, boolean withX5chain)
+                throws Exception {
+            com.authlete.cbor.CBORPairList statusList = new com.authlete.cbor.CBORPairList(java.util.List.of(
+                    new com.authlete.cbor.CBORPair(
+                            new com.authlete.cbor.CBORString("bits"), new com.authlete.cbor.CBORInteger(1)),
+                    new com.authlete.cbor.CBORPair(
+                            new com.authlete.cbor.CBORString("lst"), new com.authlete.cbor.CBORByteArray(compressed))));
+            com.authlete.cbor.CBORPairList claims = new com.authlete.cbor.CBORPairList(java.util.List.of(
+                    new com.authlete.cbor.CBORPair(
+                            new com.authlete.cbor.CBORInteger(2), new com.authlete.cbor.CBORString(sub)),
+                    new com.authlete.cbor.CBORPair(
+                            new com.authlete.cbor.CBORInteger(6),
+                            new com.authlete.cbor.CBORLong(Instant.now().getEpochSecond())),
+                    new com.authlete.cbor.CBORPair(
+                            new com.authlete.cbor.CBORInteger(4),
+                            new com.authlete.cbor.CBORLong(
+                                    Instant.now().plusSeconds(3600).getEpochSecond())),
+                    new com.authlete.cbor.CBORPair(new com.authlete.cbor.CBORInteger(65533), statusList)));
+            byte[] payload = claims.encode();
+
+            com.authlete.cose.COSEProtectedHeaderBuilder protectedBuilder =
+                    new com.authlete.cose.COSEProtectedHeaderBuilder().alg(-7).put(16, typ);
+            if (withX5chain) {
+                protectedBuilder.x5chain(java.util.List.of(signerCert, caCert));
+            }
+            com.authlete.cose.COSEProtectedHeader protectedHeader = protectedBuilder.build();
+            var toBeSigned = new com.authlete.cose.SigStructureBuilder()
+                    .signature1()
+                    .bodyAttributes(protectedHeader)
+                    .payload(payload)
+                    .build();
+            byte[] signature = new com.authlete.cose.COSESigner(signer.getPrivate()).sign(toBeSigned, -7);
+            com.authlete.cose.COSESign1 sign1 = new com.authlete.cose.COSESign1Builder()
+                    .protectedHeader(protectedHeader)
+                    .unprotectedHeader(new com.authlete.cose.COSEUnprotectedHeaderBuilder().build())
+                    .payload(payload)
+                    .signature(signature)
+                    .build();
+            return new com.authlete.cbor.CBORTaggedItem(18, sign1).encode();
+        }
+
+        private byte[] deflate(byte[] raw) {
+            Deflater deflater = new Deflater();
+            deflater.setInput(raw);
+            deflater.finish();
+            byte[] buffer = new byte[256];
+            int length = deflater.deflate(buffer);
+            deflater.end();
+            return java.util.Arrays.copyOf(buffer, length);
+        }
+
+        private java.security.KeyPair ecKeyPair() throws Exception {
+            java.security.KeyPairGenerator generator = java.security.KeyPairGenerator.getInstance("EC");
+            generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+            return generator.generateKeyPair();
+        }
+
+        private java.security.cert.X509Certificate certificate(
+                java.security.KeyPair subject,
+                java.security.KeyPair issuer,
+                String subjectDn,
+                String issuerDn,
+                boolean ca)
+                throws Exception {
+            var builder = new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                    new javax.security.auth.x500.X500Principal(issuerDn),
+                    java.math.BigInteger.valueOf(System.nanoTime()),
+                    java.util.Date.from(Instant.now().minusSeconds(3600)),
+                    java.util.Date.from(Instant.now().plusSeconds(86400)),
+                    new javax.security.auth.x500.X500Principal(subjectDn),
+                    subject.getPublic());
+            builder.addExtension(
+                    org.bouncycastle.asn1.x509.Extension.basicConstraints,
+                    true,
+                    new org.bouncycastle.asn1.x509.BasicConstraints(ca));
+            return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+                    .getCertificate(builder.build(
+                            new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA")
+                                    .build(issuer.getPrivate())));
+        }
+    }
 }

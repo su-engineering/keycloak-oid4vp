@@ -141,7 +141,7 @@ Every Status List Token signature is verified, and an unverifiable token rejects
 1. The trust list's `.../Revocation` services, or its `.../Issuance` services if it lists no revocation services.
 2. The keys that verified the referenced credential, which covers DID-based SD-JWT issuers. A list accepted this way is cached only for that issuer.
 
-The status reference must be issuer-signed: for mDoc it is read from the signed MobileSecurityObject, and an SD-JWT `status` claim must not be selectively disclosable. Any non-zero status, including suspended (`0x02`), rejects the login. Downloads are capped at 4 MiB and decompressed lists at 16 MiB.
+The status reference must be issuer-signed: for mDoc it is read from the signed MobileSecurityObject, and an SD-JWT `status` claim must not be selectively disclosable. Both Status List Token forms are supported: JWT (`application/statuslist+jwt`) and CWT (`application/statuslist+cwt`, a COSE_Sign1 with an `x5chain` or a key pinned in the trust list). The form is chosen from the response media type, falling back to the body's encoding. Any non-zero status, including suspended (`0x02`), rejects the login. Downloads are capped at 4 MiB and decompressed lists at 16 MiB.
 
 ### Caching
 
