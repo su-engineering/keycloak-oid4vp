@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Breaking:** require Keycloak 26.8.x. CI and release JARs now target 26.8.0 and 26.8.1; 26.5.x is no longer built or tested. Keycloak 26.8 marks the transaction rollback-only when an error page is rendered; the provider's error paths do not depend on writes made earlier in the same request.
 - Fix intermittent login and admin failures caused by the cross-device server-sent event stream, which kept a Keycloak session and transaction open across a suspended request and could corrupt state for unrelated requests. The cross-device login page now polls `/cross-device/status`, which returns `{"status":"pending"}`, `{"status":"complete","redirect_uri":...}`, or `204` when the flow is unknown, expired, or belongs to another browser.
 - Replace `ssePollIntervalMs` with `crossDevicePollIntervalMs` (default 2000 ms, clamped to 500–30000 ms); the old key is still read when the new one is unset. `sseTimeoutSeconds` and `ssePingIntervalSeconds` are removed and ignored.
 - Rename the theme script to `oid4vp-cross-device-status.js` and its configuration element to `oid4vp-cross-device-status-config`; custom themes that copied the old SSE script must switch to the new one.

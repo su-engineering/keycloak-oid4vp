@@ -57,6 +57,8 @@ import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
+import org.keycloak.models.UserSessionModel;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
 
@@ -151,6 +153,12 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
 
     @Override
     public Response retrieveToken(KeycloakSession session, FederatedIdentityModel identity) {
+        return null;
+    }
+
+    @Override
+    public Response retrieveToken(
+            KeycloakSession session, FederatedIdentityModel identity, UserSessionModel userSession, UserModel user) {
         return null;
     }
 

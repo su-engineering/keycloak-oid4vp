@@ -44,6 +44,7 @@ import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.KeycloakTransactionManager;
 import org.keycloak.models.KeycloakUriInfo;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.SingleUseObjectProvider;
@@ -71,6 +72,8 @@ class Oid4vpDirectPostServiceTest {
         Map<String, Map<String, String>> singleUseEntries = new HashMap<>();
 
         when(session.singleUseObjects()).thenReturn(singleUseObjects);
+        // Keycloak 26.8 ErrorPage.error marks the transaction rollback-only.
+        when(session.getTransactionManager()).thenReturn(mock(KeycloakTransactionManager.class));
         doAnswer(invocation -> {
                     singleUseEntries.put(invocation.getArgument(0), Map.copyOf(invocation.getArgument(2)));
                     return null;

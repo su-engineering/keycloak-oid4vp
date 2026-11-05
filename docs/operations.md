@@ -4,7 +4,7 @@ This guide describes the current implementation and the evidence to collect when
 
 ## Record the deployed baseline
 
-Keep the image digest, extension revision/JAR checksum, Keycloak version, realm configuration, proxy configuration, and database backup together. The root Compose file uses 26.5.5; the existing Coolify Dockerfile uses 26.5.4. Check the image actually running before choosing a build target.
+Keep the image digest, extension revision/JAR checksum, Keycloak version, realm configuration, proxy configuration, and database backup together. The root Compose file and the Coolify Dockerfile both use 26.8.1. Check the image actually running before choosing a build target.
 
 Treat provider aliases, mapper IDs, claim names, and issuer policy as application contracts. [Migration and rollback](migration.md) lists the stable identifiers and staging checks.
 
