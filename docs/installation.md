@@ -83,7 +83,7 @@ For an existing realm, configure its OID4VP provider in the same UI. Copy the bu
 
 Startup import only creates absent realms. Editing the JSON and restarting does **not** update an existing realm; use the Admin Console or Admin REST API for subsequent changes. Existing OpenKYC deployments should follow [migration](migration.md#openkyc-theme-rename-and-generic-realm).
 
-The provider ID is `oid4vp`. Mapper IDs are `oid4vp-user-attribute-mapper` and `oid4vp-user-session-mapper`. These values are independent of the Java package namespace.
+The provider ID is `oid4vp-wallet` (it was `oid4vp` up to `0.1.0-rc.1`; see [migration](migration.md#provider-id-rename-and-keycloak-268)). The examples use the realm alias `oid4vp`, which is independent of the provider ID. Mapper IDs are `oid4vp-user-attribute-mapper` and `oid4vp-user-session-mapper`. These values are independent of the Java package namespace.
 
 ## Validate the installation
 

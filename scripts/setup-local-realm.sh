@@ -201,7 +201,7 @@ cat > "$REALM_OUT" <<REALMEOF
     {
       "alias": "oid4vp",
       "displayName": "Sign in with Wallet",
-      "providerId": "oid4vp",
+      "providerId": "oid4vp-wallet",
       "enabled": true,
       "trustEmail": false,
       "storeToken": false,

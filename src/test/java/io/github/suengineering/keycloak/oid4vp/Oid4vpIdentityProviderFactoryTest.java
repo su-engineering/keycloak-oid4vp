@@ -61,7 +61,7 @@ class Oid4vpIdentityProviderFactoryTest {
 
         List<ProviderConfigProperty> properties = factory.getConfigProperties();
 
-        assertThat(factory.getId()).isEqualTo("oid4vp");
+        assertThat(factory.getId()).isEqualTo("oid4vp-wallet");
         assertThat(factory.getName()).isEqualTo("OID4VP (Wallet Login)");
         assertThat(factory.createConfig()).isInstanceOf(Oid4vpIdentityProviderConfig.class);
         assertThat(properties).isNotEmpty();

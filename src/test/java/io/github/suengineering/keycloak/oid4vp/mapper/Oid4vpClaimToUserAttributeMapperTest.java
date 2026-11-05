@@ -45,7 +45,7 @@ class Oid4vpClaimToUserAttributeMapperTest {
         assertThat(mapper.getDisplayCategory()).isEqualTo("Attribute Importer");
         assertThat(mapper.getDisplayType()).isEqualTo("OID4VP Claim to User Attribute");
         assertThat(mapper.getHelpText()).contains("verifiable credential");
-        assertThat(mapper.getCompatibleProviders()).containsExactly("oid4vp");
+        assertThat(mapper.getCompatibleProviders()).containsExactly("oid4vp-wallet");
         assertThat(mapper.supportsSyncMode(IdentityProviderSyncMode.LEGACY)).isTrue();
         assertThat(properties)
                 .extracting(ProviderConfigProperty::getName)

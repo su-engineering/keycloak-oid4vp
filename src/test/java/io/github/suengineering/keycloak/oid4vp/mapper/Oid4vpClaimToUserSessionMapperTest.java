@@ -47,7 +47,7 @@ class Oid4vpClaimToUserSessionMapperTest {
         assertThat(mapper.getDisplayCategory()).isEqualTo("Token Mapper");
         assertThat(mapper.getDisplayType()).isEqualTo("OID4VP Claim to User Session");
         assertThat(mapper.getHelpText()).contains("session note");
-        assertThat(mapper.getCompatibleProviders()).containsExactly("oid4vp");
+        assertThat(mapper.getCompatibleProviders()).containsExactly("oid4vp-wallet");
         assertThat(mapper.supportsSyncMode(IdentityProviderSyncMode.FORCE)).isTrue();
         assertThat(properties)
                 .extracting(ProviderConfigProperty::getName)

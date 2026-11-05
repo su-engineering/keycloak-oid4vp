@@ -19,7 +19,7 @@ Example realm import fragment:
     {
       "alias": "oid4vp",
       "displayName": "Sign in with Wallet",
-      "providerId": "oid4vp",
+      "providerId": "oid4vp-wallet",
       "enabled": true,
       "config": {
         "clientIdScheme": "x509_san_dns",
