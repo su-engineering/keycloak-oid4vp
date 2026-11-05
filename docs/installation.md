@@ -8,10 +8,10 @@ Install this extension in a test environment matching your deployment before pro
 | --- | --- |
 | Java | 21 |
 | Maven | Wrapper-pinned 3.9.16 |
-| Maven compile target | Keycloak 26.5.5 |
-| Root Compose runtime | Keycloak 26.5.5 |
-| Existing Coolify runtime | Keycloak 26.5.4 |
-| CI runtime matrix | Keycloak 26.5.4 and 26.5.5 |
+| Maven compile target | Keycloak 26.8.1 |
+| Root Compose runtime | Keycloak 26.8.1 |
+| Existing Coolify runtime | Keycloak 26.8.1 |
+| CI runtime matrix | Keycloak 26.8.0 and 26.8.1 |
 | Release candidate | `0.1.0-rc.1` |
 
 These are tested compatibility targets, not a long-term support promise. Download a runtime-specific JAR and verify its checksum using the [release guide](releases.md), or build from a reviewed revision below.
@@ -29,7 +29,7 @@ Output: `target/keycloak-extension-oid4vp.jar`. Keep its checksum and source rev
 To compile and test against the existing Coolify runtime instead:
 
 ```sh
-./mvnw clean verify -Dkeycloak.version=26.5.4
+./mvnw clean verify -Dkeycloak.version=26.8.0
 ```
 
 ## Add it to Keycloak
@@ -39,7 +39,7 @@ For a filesystem installation, copy the JAR to `$KC_HOME/providers/`, then run `
 A minimal container build for a disposable installation is:
 
 ```dockerfile
-FROM quay.io/keycloak/keycloak:26.5.5
+FROM quay.io/keycloak/keycloak:26.8.1
 COPY --chown=keycloak:keycloak target/keycloak-extension-oid4vp.jar /opt/keycloak/providers/keycloak-extension-oid4vp.jar
 RUN /opt/keycloak/bin/kc.sh build
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]

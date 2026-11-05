@@ -12,7 +12,7 @@ COPY src ./src
 RUN ./mvnw --batch-mode --no-transfer-progress clean package -DskipTests
 
 # Stage 2: Runtime - Keycloak with extension
-FROM quay.io/keycloak/keycloak:26.5.4
+FROM quay.io/keycloak/keycloak:26.8.1
 
 # Set build-time environment variables (must be set before kc.sh build)
 ENV KC_DB=postgres

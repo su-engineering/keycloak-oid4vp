@@ -52,11 +52,11 @@ On Linux, use `install --with-deps chromium` for required OS packages. CI instal
 # Both bundled themes, real wallet login, responsive layout, and standard forms
 ./mvnw verify -Dit.test=KeycloakThemeE2eIT
 
-# Entire suite against the existing Coolify runtime
-./mvnw clean verify -Dkeycloak.version=26.5.4
+# Entire suite against the older supported patch release
+./mvnw clean verify -Dkeycloak.version=26.8.0
 ```
 
-The E2E container version follows `keycloak.version`; use `clean` when switching versions. CI runs both 26.5.4 and 26.5.5. Prefer `verify` when selecting E2E classes so the provider is packaged first and Failsafe reports failures correctly.
+The E2E container version follows `keycloak.version`; use `clean` when switching versions. CI runs both 26.8.0 and 26.8.1. Prefer `verify` when selecting E2E classes so the provider is packaged first and Failsafe reports failures correctly.
 
 ### What the tests establish
 

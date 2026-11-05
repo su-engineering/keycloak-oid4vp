@@ -2,7 +2,7 @@
 
 Versioned provider JARs and checksums are available under [Releases](https://github.com/su-engineering/keycloak-oid4vp/releases). Repository access is required while the repository is private.
 
-Each release contains a separate JAR for Keycloak **26.5.4** and **26.5.5**, plus `SHA256SUMS`. Use Java 21 and the JAR matching your runtime. Prereleases are for integration testing and are explicitly marked on GitHub.
+Each release contains a separate JAR for Keycloak **26.8.0** and **26.8.1**, plus `SHA256SUMS`. Releases up to `0.1.0-rc.1` targeted 26.5.4 and 26.5.5. Use Java 21 and the JAR matching your runtime. Prereleases are for integration testing and are explicitly marked on GitHub.
 
 ## Download and install
 

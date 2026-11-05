@@ -57,7 +57,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           mkdir dist
-          for keycloak_version in 26.5.4 26.5.5; do
+          for keycloak_version in 26.8.0 26.8.1; do
             cp "artifacts/provider-keycloak-${keycloak_version}/keycloak-extension-oid4vp.jar" \
               "dist/keycloak-extension-oid4vp-${RELEASE_VERSION}-keycloak-${keycloak_version}.jar"
           done

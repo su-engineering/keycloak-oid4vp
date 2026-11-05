@@ -1,6 +1,6 @@
 # Coolify deployment
 
-This directory builds Keycloak **26.5.4** with PostgreSQL and TLS termination at Coolify's reverse proxy. New installations import the generic `wallet` realm. Complete provider and client configuration in the [Admin Console](../docs/installation.md#configure-a-realm).
+This directory builds Keycloak **26.8.1** with PostgreSQL and TLS termination at Coolify's reverse proxy. New installations import the generic `wallet` realm. Complete provider and client configuration in the [Admin Console](../docs/installation.md#configure-a-realm).
 
 The JAR contains `su-engineering` and `openkyc`. Direct wallet entry is configured by the realm authentication flow. Existing OpenKYC deployments must select `openkyc` after upgrading; the IdP alias remains `oid4vp`. See [migration](../docs/migration.md#openkyc-theme-rename-and-generic-realm).
 
@@ -32,12 +32,12 @@ These items are tracked in [enterprise readiness](../docs/enterprise-readiness.m
 Run from the repository root:
 
 ```sh
-./mvnw clean verify -Dkeycloak.version=26.5.4
+./mvnw clean verify -Dkeycloak.version=26.8.1
 docker compose --project-directory . -f deployment/docker-compose.coolify.yml config --quiet
 docker build -f deployment/docker/Dockerfile -t keycloak-oid4vp:review .
 ```
 
-The build copies exactly one provider JAR: `/opt/keycloak/providers/keycloak-extension-oid4vp.jar`. The current Dockerfile compiles with the Maven default (26.5.5) and runs on 26.5.4; the test matrix covers both. A future runtime upgrade must align build and deployment choices deliberately.
+The build copies exactly one provider JAR: `/opt/keycloak/providers/keycloak-extension-oid4vp.jar`. The Dockerfile compiles with the Maven default (26.8.1) and runs on 26.8.1. Upgrading an existing 26.5.x deployment runs Keycloak's database migrations: back up the database first and follow [migration](../docs/migration.md).
 
 ## Configure Coolify
 

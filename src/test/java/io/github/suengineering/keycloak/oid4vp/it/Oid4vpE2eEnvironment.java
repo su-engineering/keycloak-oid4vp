@@ -146,7 +146,7 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
 
         Path walletTlsBundle = exportWalletTlsCertificatesToFile(wallet, encryptedRequestWallet, isoWallet);
         keycloak = new GenericContainer<>(
-                        "quay.io/keycloak/keycloak:" + System.getProperty("keycloak.test.version", "26.5.5"))
+                        "quay.io/keycloak/keycloak:" + System.getProperty("keycloak.test.version", "26.8.1"))
                 .withNetwork(network)
                 .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
                 .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
