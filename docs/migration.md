@@ -1,5 +1,30 @@
 # Migration and rollback
 
+## Provider ID rename and Keycloak 26.8
+
+The extension now requires Keycloak **26.8.x**, and its identity provider ID changes from `oid4vp` to `oid4vp-wallet`. Keycloak 26.8 ships its own experimental OID4VP verifier under the ID `oid4vp` (feature `oid4vc-vp`). With the old ID, enabling that feature would make one of the two providers silently disappear. The new ID lets both be installed side by side.
+
+What changes and what does not:
+
+| Item | Change |
+| --- | --- |
+| Identity provider ID (`providerId`) | `oid4vp` → `oid4vp-wallet` |
+| Realm alias, broker URLs, wallet `response_uri` | Unchanged; the examples still use the alias `oid4vp` |
+| Mapper IDs | Unchanged (`oid4vp-user-attribute-mapper`, `oid4vp-user-session-mapper`) |
+| Linked user identities | Unchanged |
+| Keycloak runtime | 26.5.x → 26.8.x; Keycloak runs its own database migrations on first start |
+
+Keycloak's Admin REST API cannot change an existing provider's ID, and deleting and recreating the provider would delete users' linked identities. Rename it in the database instead:
+
+1. Stop Keycloak and back up its database.
+2. Run [`scripts/migrate-provider-id.sql`](../scripts/migrate-provider-id.sql), for example `psql "$KC_DB_URL" -v ON_ERROR_STOP=1 -f scripts/migrate-provider-id.sql`.
+3. Install the new provider JAR built for your 26.8.x runtime and start Keycloak 26.8.x.
+4. Open **Identity providers → (your alias)** and confirm the settings and mappers load.
+
+For realm JSON exports that you import, replace `"providerId": "oid4vp"` with `"providerId": "oid4vp-wallet"` before importing.
+
+Do not run the script if you have enabled Keycloak's native `oid4vc-vp` feature and created native OID4VP providers, because those rows would be renamed too. Rollback: stop Keycloak, restore the backup (Keycloak's schema migrations are not reversible), and redeploy the previous JAR and Keycloak 26.5.x image.
+
 ## Independent development baseline
 
 The development version starts at `0.1.0-SNAPSHOT`, with Maven group `io.github.su-engineering` and Java package `io.github.suengineering.keycloak.oid4vp`.

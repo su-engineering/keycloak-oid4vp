@@ -39,7 +39,11 @@ public final class Oid4vpConstants {
         return base + "realms/" + realmName + "/broker/" + idpAlias + "/endpoint";
     }
 
-    public static final String PROVIDER_ID = "oid4vp";
+    /**
+     * Identity provider factory ID. Keycloak 26.8 ships its own experimental OID4VP provider
+     * registered as {@code oid4vp}; a distinct ID lets both be installed side by side.
+     */
+    public static final String PROVIDER_ID = "oid4vp-wallet";
 
     // Credential formats
     public static final String FORMAT_SD_JWT_VC = "dc+sd-jwt";

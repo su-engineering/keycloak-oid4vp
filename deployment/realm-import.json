@@ -8,7 +8,7 @@
     {
       "alias": "oid4vp",
       "displayName": "Sign in with Wallet",
-      "providerId": "oid4vp",
+      "providerId": "oid4vp-wallet",
       "enabled": false,
       "trustEmail": false,
       "storeToken": false,
