@@ -331,6 +331,15 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .defaultValue(String.valueOf(Oid4vpIdentityProviderConfig.DEFAULT_DID_CACHE_TTL_SECONDS))
                 .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.DID_WEB_LEGACY_PATH_LAYOUT)
+                .label("Legacy did:web Path Layout")
+                .helpText("Compatibility only. Resolve did:web DIDs with a path from <path>/.well-known/did.json, "
+                        + "as releases up to 0.1.0-rc.1 did, instead of the standard <path>/did.json. "
+                        + "Host-only DIDs are unaffected.")
+                .type(ProviderConfigProperty.BOOLEAN_TYPE)
+                .defaultValue("false")
+                .add()
                 .build();
     }
 
