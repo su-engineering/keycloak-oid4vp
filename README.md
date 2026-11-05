@@ -18,7 +18,8 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | --- | --- |
 | **did:web issuer verification** | Opt-in HTTPS DID resolution for SD-JWT issuer keys, including EC and Ed25519; signature, disclosures, and holder binding are verified. |
 | **did:webvh issuer verification** | Opt-in WebVH v1.0 history and witness validation, current assertion keys, and strict key-ID selection. [Setup and limits](docs/did-webvh.md). |
-| **Certificate-based verification** | X.509 issuer verification and ETSI trust-list integration; issuer-metadata fallback outside strict X.509 mode. |
+| **Certificate-based verification** | X.509 issuer verification against a signed ETSI TS 119 602 List of Trusted Entities (JSON/JWT binding); issuer-metadata keys are accepted only with an anchored certificate chain. |
+| **Revocation** | Token Status List (JWT form) for SD-JWT and mDoc; status list signatures are always verified. |
 | **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
 | **Wallet interaction** | Same-device links and cross-device QR codes, with status polling to resume browser login. |
 | **Presentation requests** | Multiple credentials per login, DCQL required/alternative sets and verified claim conditions; `direct_post` and encrypted `direct_post.jwt` responses. |
@@ -27,7 +28,9 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 
 ### Project status
 
-`0.1.0-rc.1` is the first release candidate. [Versioned JARs and checksums](https://github.com/su-engineering/keycloak-oid4vp/releases) are built and tested for both pinned Keycloak versions. The did:web SD-JWT flow is deployed; stable releases and enterprise support are being prepared. See [release and download instructions](docs/releases.md).
+The extension targets Keycloak 26.8. [Versioned JARs and checksums](https://github.com/su-engineering/keycloak-oid4vp/releases) are built and tested for both supported Keycloak patch versions. The did:web SD-JWT flow is deployed; enterprise support is being prepared. See [release and download instructions](docs/releases.md).
+
+Keycloak 26.8 also ships an experimental native OID4VP verifier (feature `oid4vc-vp`). This extension uses its own provider ID, `oid4vp-wallet`, so both can be installed side by side; upgrading from `0.1.0-rc.1` requires a [one-line database migration](docs/migration.md#provider-id-rename-and-keycloak-268).
 
 **Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** In particular, the legacy did:web resolver's key authorization and standard path/port handling need further work. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
 

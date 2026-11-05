@@ -55,7 +55,7 @@ Remove private keys, tokens, cookies, full presentations, personal claims, and l
 
 Issuer trust and verifier authentication are separate. The certificate identifying the verifier to a wallet does not authorize every credential issuer. DID resolution is also not a substitute for an issuer allow-list or signed status policy.
 
-Before rotating keys or changing cache settings, test both overlap and removal scenarios with the deployed credential shape. The current DID resolver caches within resolver instances; the status-list cache is shared by URI. Cache isolation and bounded network access are outstanding [readiness work](enterprise-readiness.md), so do not assume tenant-independent trust from the cache alone.
+Before rotating keys or changing cache settings, test both overlap and removal scenarios with the deployed credential shape. The current DID resolver caches within resolver instances; status-list cache entries are keyed by URI and scoped to the trust that verified them. Cache isolation and bounded network access are outstanding [readiness work](enterprise-readiness.md), so do not assume tenant-independent trust from the cache alone.
 
 ## Health and rollout
 

@@ -112,7 +112,8 @@ This mode is intended for credentials that do not carry a stable account identif
 | `trustListUrl` | URL of an ETSI TS 119 602 trust list JWT. | *(none)* |
 | `trustListLoTEType` | Expected trust-list LoTE type for this IdP. Keep one trust domain per OID4VP IdP instance. Leave empty only to accept all LoTE types from the configured trust list. | empty |
 | `trustedAuthoritiesMode` | DCQL `trusted_authorities` mode: `none`, `etsi_tl`, or `aki`. | `none` |
-| `trustListSigningCertPem` | PEM-encoded certificate chain used to verify the trust list JWT signature. If omitted, the trust list JWT is not signature-verified. | *(none)* |
+| `trustListSigningCertPem` | PEM-encoded certificate chain used to verify the trust list JWT signature. Required when `trustListUrl` is set; an unsigned trust list is rejected. | *(none)* |
+| `trustListAllowUnsigned` | **Local testing only.** Accept the trust list without verifying its signature when no signing certificate is configured. | `false` |
 | `allowedIssuers` | Comma-separated list of allowed SD-JWT issuer (`iss`) values, or `*`. mDoc credentials are not checked against this list because mDoc does not define a standard canonical credential-issuer string equivalent to SD-JWT `iss`. | `*` |
 | `clockSkewSeconds` | Clock skew tolerance for credential verification. | `60` |
 | `kbJwtMaxAgeSeconds` | Maximum accepted age of the SD-JWT KB-JWT `iat` claim. | `300` |
@@ -121,15 +122,26 @@ For SD-JWT VC verification, issuer-key resolution follows this order:
 
 1. If DID resolution is enabled and the issuer is a DID, resolve it through its explicitly allowed `did:web` or `did:webvh` method. Failure, an unsupported method, or an empty key set rejects the credential; it cannot fall through to certificate or metadata verification. `did:webvh` also rejects when DID resolution is disabled.
 2. Validate an `x5c` certificate chain against the configured trust list.
-3. Outside strict X.509 mode, try JWT VC issuer metadata via `iss` and JOSE `kid` at `/.well-known/jwt-vc-issuer`, including `jwks_uri`.
+3. Outside strict X.509 mode, try JWT VC issuer metadata via `iss` and JOSE `kid` at `/.well-known/jwt-vc-issuer`, including `jwks_uri`. The resolved key is accepted only if its `x5c` chain is anchored in the trust list. A key published in metadata without an anchored chain is rejected. Issuers without a PKI must use did:web or did:webvh with `allowedIssuers`.
 4. Outside strict X.509 mode, try direct trusted certificates as the final fallback.
+
+Trust anchors are used only within their validity period. Only CA certificates anchor a presented chain; a trusted end-entity certificate is accepted only when it is itself the presented leaf. A presented `x5c` chain that fails validation rejects the credential; it is not retried against the trusted keys.
 
 With DID resolution disabled, `enforceHaip=true` restricts this to the `x5c` path. With DID resolution enabled, the earlier DID path is still attempted. Use `enforceHaip=false` for the existing DID flow and read the [DID limitations](#didweb-issuer-verification).
 
 Every returned credential is matched to its own ID in the DCQL query saved for that login. Format, supplied type metadata, claim paths, expected values and required sets are evaluated. Queries can come from the full JSON editor or configured mappers. See [DCQL acceptance rules](dcql.md#request-conditions-and-login-policy).
 
 Use one OID4VP IdP instance per trust domain. If `trustListLoTEType` is configured, it must match the fetched trust list's `ListAndSchemeInformation.LoTEType`. If it is left empty, all LoTE types from that trust list are accepted and the provider logs a warning.
-Within the accepted trust list, credential signature verification uses only `.../SvcType/.../Issuance` services. Status-list JWT verification uses only `.../SvcType/.../Revocation` services.
+Within the accepted trust list, credential signature verification uses only `.../SvcType/.../Issuance` services.
+
+### Revocation (Token Status List)
+
+Every Status List Token signature is verified, and an unverifiable token rejects the login. Trust is tried in this order:
+
+1. The trust list's `.../Revocation` services, or its `.../Issuance` services if it lists no revocation services.
+2. The keys that verified the referenced credential, which covers DID-based SD-JWT issuers. A list accepted this way is cached only for that issuer.
+
+The status reference must be issuer-signed: for mDoc it is read from the signed MobileSecurityObject, and an SD-JWT `status` claim must not be selectively disclosable. Any non-zero status, including suspended (`0x02`), rejects the login. Downloads are capped at 4 MiB and decompressed lists at 16 MiB.
 
 ### Caching
 
