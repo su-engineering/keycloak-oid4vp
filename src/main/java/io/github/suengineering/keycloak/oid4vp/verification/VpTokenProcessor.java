@@ -71,7 +71,8 @@ public class VpTokenProcessor {
             List<X509Certificate> trustListSigningCerts,
             Duration trustListMaxStaleAge,
             String expectedTrustListLoTEType,
-            DidResolver didResolver) {}
+            DidResolver didResolver,
+            boolean trustListAllowUnsigned) {}
 
     public record Request(
             String vpToken,
@@ -95,7 +96,8 @@ public class VpTokenProcessor {
                 config.trustListUrl(),
                 config.trustListMaxCacheTtl(),
                 config.trustListMaxStaleAge(),
-                config.trustListSigningCerts());
+                config.trustListSigningCerts(),
+                config.trustListAllowUnsigned());
         this.statusListVerifier =
                 new StatusListVerifier(config.session(), this.trustListProvider, config.statusListMaxCacheTtl());
         this.objectMapper = objectMapper;

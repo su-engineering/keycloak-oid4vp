@@ -183,9 +183,11 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .property()
                 .name(Oid4vpIdentityProviderConfig.TRUST_LIST_URL)
                 .label("Trust List URL")
-                .helpText("URL of the ETSI TS 119 612 trust list JWT. "
-                        + "Used to verify issuer signatures on credentials (SD-JWT x5c chains and mDoc COSE_Sign1). "
-                        + "If empty, credential signature verification is skipped.")
+                .helpText(
+                        "URL of a signed ETSI TS 119 602 List of Trusted Entities (LoTE) in its JSON/JWT binding. "
+                                + "Its issuance services anchor SD-JWT x5c chains and mDoc document signer certificates; "
+                                + "its revocation services sign status lists. "
+                                + "If empty, only DID-based SD-JWT issuers (with DID resolution and an issuer allowlist) can be verified.")
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
                 .property()
@@ -213,9 +215,17 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .name(Oid4vpIdentityProviderConfig.TRUST_LIST_SIGNING_CERT_PEM)
                 .label("Trust List Signing Certificate (PEM)")
                 .helpText("PEM-encoded X.509 certificate used to verify the trust list JWT signature. "
-                        + "If not configured, the trust list JWT signature is not verified and the fetched trust list is trusted as-is. "
-                        + "This is acceptable for local testing only.")
+                        + "Required whenever a Trust List URL is set: an unsigned trust list is rejected.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.TRUST_LIST_ALLOW_UNSIGNED)
+                .label("Allow Unsigned Trust List (insecure)")
+                .helpText(
+                        "Local testing only. Accept the trust list without verifying its signature when no signing certificate is configured. "
+                                + "Anyone who can alter the trust list response can then choose which issuers are trusted.")
+                .type(ProviderConfigProperty.BOOLEAN_TYPE)
+                .defaultValue("false")
                 .add()
                 .property()
                 .name(Oid4vpIdentityProviderConfig.TRUST_LIST_MAX_CACHE_TTL_SECONDS)
@@ -389,10 +399,17 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
         }
         String warningKey = config.getAlias() + "|" + config.getTrustListUrl();
         if (WARNED_UNCHECKED_TRUST_LISTS.add(warningKey)) {
-            LOG.warnf(
-                    "OID4VP IdP '%s': trustListUrl is configured but trustListSigningCertPem is empty. "
-                            + "The trust list JWT signature will not be verified and fetched trust anchors will be trusted as-is.",
-                    config.getAlias());
+            if (config.isTrustListAllowUnsigned()) {
+                LOG.warnf(
+                        "OID4VP IdP '%s': trustListAllowUnsigned is enabled. The trust list JWT signature is not "
+                                + "verified and fetched trust anchors are trusted as-is. Use this for local testing only.",
+                        config.getAlias());
+            } else {
+                LOG.warnf(
+                        "OID4VP IdP '%s': trustListUrl is configured but trustListSigningCertPem is empty. "
+                                + "The trust list will be rejected until a signing certificate is configured.",
+                        config.getAlias());
+            }
         }
     }
 

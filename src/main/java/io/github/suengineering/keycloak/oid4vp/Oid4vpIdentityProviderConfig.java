@@ -67,6 +67,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public static final String TRUST_LIST_URL = "trustListUrl";
     public static final String TRUST_LIST_SIGNING_CERT_PEM = "trustListSigningCertPem";
+    public static final String TRUST_LIST_ALLOW_UNSIGNED = "trustListAllowUnsigned";
     public static final String TRUSTED_AUTHORITIES_MODE = "trustedAuthoritiesMode";
     public static final String TRUST_LIST_LOTE_TYPE = "trustListLoTEType";
 
@@ -469,6 +470,15 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
             }
         }
         return false;
+    }
+
+    /** Insecure, for local testing only: accept a trust list without a configured signing certificate. */
+    public boolean isTrustListAllowUnsigned() {
+        return getBoolConfig(TRUST_LIST_ALLOW_UNSIGNED, false);
+    }
+
+    public void setTrustListAllowUnsigned(boolean allow) {
+        getConfig().put(TRUST_LIST_ALLOW_UNSIGNED, String.valueOf(allow));
     }
 
     public boolean isDidResolutionEnabled() {

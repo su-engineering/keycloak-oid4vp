@@ -478,10 +478,22 @@ class TrustListProviderTest {
         }
 
         @Test
-        void verifySignature_withNoCert_skipsVerification() throws Exception {
+        void verifySignature_withNoCert_isRejected() throws Exception {
             TrustListProvider provider = new TrustListProvider(null, "https://example.com", null, null);
 
-            // Sign with any key — verification should be skipped
+            String jwt = buildSignedJwt(new JWTClaimsSet.Builder()
+                    .claim("TrustedEntitiesList", List.of())
+                    .build());
+
+            assertThatThrownBy(() -> provider.verifySignature(jwt))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("no signing certificate configured");
+        }
+
+        @Test
+        void verifySignature_withNoCertAndExplicitInsecureOptIn_skipsVerification() throws Exception {
+            TrustListProvider provider = new TrustListProvider(null, "https://example.com", null, null, null, true);
+
             String jwt = buildSignedJwt(new JWTClaimsSet.Builder()
                     .claim("TrustedEntitiesList", List.of())
                     .build());
