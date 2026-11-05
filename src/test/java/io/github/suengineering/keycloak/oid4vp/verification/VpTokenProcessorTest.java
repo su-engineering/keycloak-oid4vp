@@ -173,13 +173,15 @@ class VpTokenProcessorTest {
                         query)))
                 .isInstanceOf(IdentityBrokerException.class);
         StatusListVerifier status = org.mockito.Mockito.mock(StatusListVerifier.class);
+        // The status check only sees the issuer-signed status reference, so revoke whichever
+        // credential is checked second; either way the whole response must be rejected.
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
         org.mockito.Mockito.doAnswer(invocation -> {
-                    Map<String, Object> claims = invocation.getArgument(0);
-                    if ("License".equals(claims.get("vct"))) throw new IllegalStateException("Credential revoked");
+                    if (calls.incrementAndGet() == 2) throw new IllegalStateException("Credential revoked");
                     return null;
                 })
                 .when(status)
-                .checkRevocationStatus(org.mockito.ArgumentMatchers.anyMap());
+                .checkRevocationStatus(org.mockito.ArgumentMatchers.anyMap(), org.mockito.ArgumentMatchers.any());
         VpTokenProcessor withStatus =
                 new VpTokenProcessor(objectMapper, status, new TrustListProvider(List.of(signingCert)));
         assertThatThrownBy(() -> withStatus.process(dcqlRequest(
@@ -187,7 +189,7 @@ class VpTokenProcessorTest {
                         query)))
                 .hasMessageContaining("revoked");
         org.mockito.Mockito.verify(status, org.mockito.Mockito.times(2))
-                .checkRevocationStatus(org.mockito.ArgumentMatchers.anyMap());
+                .checkRevocationStatus(org.mockito.ArgumentMatchers.anyMap(), org.mockito.ArgumentMatchers.any());
     }
 
     @org.junit.jupiter.params.ParameterizedTest

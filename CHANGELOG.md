@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Token Status List signatures are always verified. Trust comes from the trust list's revocation services, otherwise its issuance services, otherwise the keys that verified the referenced credential (for example a did:web issuer). A token that none of these can verify is rejected. Cached lists verified with one issuer's own key are not reused for other issuers.
+- mDoc revocation is checked against the `status` in the signed MobileSecurityObject instead of the disclosed data elements. An SD-JWT `status` claim must be issuer-signed; a selectively disclosable one is rejected.
+- Bound status list downloads to 4 MiB and decompressed lists to 16 MiB.
 - Issuer keys resolved from `/.well-known/jwt-vc-issuer` metadata now require a certificate chain anchored in the trust list. Issuers without a PKI should use did:web or did:webvh with an explicit issuer allowlist.
 - mDoc issuer authentication now requires the document signer certificate in `x5chain` and a chain that validates against the trust anchors; it no longer falls back to trying every trusted key directly. The MSO is mandatory, its `digestAlgorithm` (SHA-256/384/512) is honoured, every disclosed namespace and item must have a digest, and `validityInfo` with `validFrom` and `validUntil` is required.
 - X.509 trust anchors must be within their validity period, and only CA certificates may anchor a presented chain; a trusted end-entity certificate is accepted only as the presented leaf itself. A JWT whose `x5c` chain fails validation is rejected instead of being retried against the trusted keys.

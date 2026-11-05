@@ -17,7 +17,8 @@
 package io.github.suengineering.keycloak.oid4vp.verification;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -25,10 +26,11 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
-import java.util.zip.InflaterInputStream;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.util.SimpleHttp;
+import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.KeycloakSession;
 
@@ -43,7 +45,34 @@ public class StatusListVerifier {
 
     private static final Logger LOG = Logger.getLogger(StatusListVerifier.class);
     private static final int DEFAULT_BITS_PER_STATUS = 1;
+    /** Largest Status List Token accepted over HTTP. */
+    static final long MAX_STATUS_LIST_TOKEN_BYTES = 4L * 1024 * 1024;
+    /** Largest decompressed status list accepted (128 Mi one-bit entries). */
+    static final int MAX_DECOMPRESSED_STATUS_LIST_BYTES = 16 * 1024 * 1024;
+
+    private static final String TRUST_ANCHOR_DOMAIN = "trust-anchors";
     private static final ConcurrentHashMap<String, CachedStatusList> CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * How the signature of a Status List Token may be trusted for one referenced credential.
+     *
+     * <p>Trust-list certificates (revocation services, otherwise issuance services) are always
+     * tried first. When the referenced credential was verified with issuer keys that are not
+     * certificate-based, such as a did:web issuer, the Status List Token may instead be signed by
+     * one of those same keys.
+     *
+     * @param issuer the referenced credential's issuer, used to scope cached lists
+     * @param issuerVerifiers the keys that verified the referenced credential
+     */
+    public record StatusListTrust(String issuer, List<SignatureVerifierContext> issuerVerifiers) {
+        public StatusListTrust {
+            issuerVerifiers = issuerVerifiers != null ? List.copyOf(issuerVerifiers) : List.of();
+        }
+
+        public static StatusListTrust trustAnchorsOnly() {
+            return new StatusListTrust(null, List.of());
+        }
+    }
 
     private final KeycloakSession session;
     private final TrustListProvider trustListProvider;
@@ -71,6 +100,16 @@ public class StatusListVerifier {
      * @throws IllegalStateException if the credential is revoked or status check fails
      */
     public void checkRevocationStatus(Map<String, Object> claims) {
+        checkRevocationStatus(claims, StatusListTrust.trustAnchorsOnly());
+    }
+
+    /**
+     * Checks the revocation status of a credential, accepting a Status List Token signed either by
+     * the trust anchors or by one of the given issuer keys.
+     *
+     * @throws IllegalStateException if the credential is revoked or status check fails
+     */
+    public void checkRevocationStatus(Map<String, Object> claims, StatusListTrust trust) {
         StatusReference ref = extractStatusReference(claims);
         if (ref == null) {
             LOG.debug("No status_list claim found in credential — skipping revocation check");
@@ -80,7 +119,7 @@ public class StatusListVerifier {
         LOG.infof("Checking revocation status: uri=%s, idx=%d", ref.uri, ref.idx);
 
         try {
-            DecodedStatusList statusList = fetchAndDecodeStatusList(ref.uri);
+            DecodedStatusList statusList = fetchAndDecodeStatusList(ref.uri, trust);
             int status = getStatusAtIndex(statusList.statusBits, ref.idx, statusList.bitsPerStatus);
 
             if (status != 0) {
@@ -131,8 +170,13 @@ public class StatusListVerifier {
     }
 
     DecodedStatusList fetchAndDecodeStatusList(String uri) throws Exception {
+        return fetchAndDecodeStatusList(uri, StatusListTrust.trustAnchorsOnly());
+    }
+
+    DecodedStatusList fetchAndDecodeStatusList(String uri, StatusListTrust trust) throws Exception {
         CachedStatusList cached = CACHE.get(uri);
-        if (cached != null && cached.isValid()) {
+        // A list verified with one issuer's own key must not satisfy another issuer's credentials.
+        if (cached != null && cached.isValid() && cached.usableFor(issuerDomain(trust))) {
             LOG.debugf("Using cached status list for %s (expires %s)", uri, cached.expiresAt);
             return cached.decoded;
         }
@@ -141,7 +185,7 @@ public class StatusListVerifier {
         JWSInput signedJwt = X5cChainValidator.parseJwt(jwt);
         Map<String, Object> claims = X5cChainValidator.parseClaims(signedJwt);
 
-        verifyStatusListJwtSignature(jwt, claims);
+        String trustDomain = verifyStatusListJwtSignature(jwt, trust);
 
         validateStatusListToken(headerType(signedJwt), stringClaim(claims, "sub"), instantClaim(claims, "exp"), uri);
         Map<String, Object> statusListClaim = jsonObjectClaim(claims, "status_list");
@@ -167,21 +211,66 @@ public class StatusListVerifier {
         Instant expiresAt = resolveExpiry(instantClaim(claims, "exp"), claims.get("ttl"));
 
         var decoded = new DecodedStatusList(statusBits, bitsPerStatus);
-        CACHE.put(uri, new CachedStatusList(decoded, expiresAt));
+        CACHE.put(uri, new CachedStatusList(decoded, expiresAt, trustDomain));
         return decoded;
     }
 
-    private void verifyStatusListJwtSignature(String compactJwt, Map<String, Object> claims) throws Exception {
-        List<X509Certificate> trustedCerts =
-                trustListProvider != null ? trustListProvider.getRevocationCertificates() : List.of();
-        if (trustedCerts.isEmpty()) {
-            LOG.debugf(
-                    "Status list JWT signature not verified: no trusted keys configured (issuer=%s)",
-                    stringClaim(claims, "iss"));
-            return;
+    /**
+     * Verifies the Status List Token signature and returns the trust domain that accepted it. An
+     * unverifiable token is always rejected.
+     */
+    String verifyStatusListJwtSignature(String compactJwt, StatusListTrust trust) {
+        List<X509Certificate> anchors = List.of();
+        if (trustListProvider != null) {
+            anchors = trustListProvider.getRevocationCertificates();
+            if (anchors.isEmpty()) {
+                anchors = trustListProvider.getIssuanceCertificates();
+            }
         }
 
-        X5cChainValidator.verifyJwtSignature(compactJwt, trustedCerts);
+        Exception anchorFailure = null;
+        if (!anchors.isEmpty()) {
+            try {
+                X5cChainValidator.verifyJwtSignature(compactJwt, anchors);
+                return TRUST_ANCHOR_DOMAIN;
+            } catch (Exception e) {
+                anchorFailure = e;
+            }
+        }
+
+        if (!trust.issuerVerifiers().isEmpty() && verifyWithIssuerKeys(compactJwt, trust.issuerVerifiers())) {
+            return issuerDomain(trust);
+        }
+
+        if (anchorFailure != null) {
+            throw new IllegalStateException(
+                    "Status list token signature is not trusted: " + anchorFailure.getMessage(), anchorFailure);
+        }
+        throw new IllegalStateException(
+                "Status list token signature cannot be verified: no trust anchors or issuer keys available");
+    }
+
+    private boolean verifyWithIssuerKeys(String compactJwt, List<SignatureVerifierContext> verifiers) {
+        JWSInput jwt = X5cChainValidator.parseJwt(compactJwt);
+        String algorithm = jwt.getHeader().getRawAlgorithm();
+        byte[] signingInput = jwt.getEncodedSignatureInput().getBytes(StandardCharsets.US_ASCII);
+        for (SignatureVerifierContext verifier : verifiers) {
+            try {
+                if (verifier.getAlgorithm() != null && !verifier.getAlgorithm().equals(algorithm)) {
+                    continue;
+                }
+                if (verifier.verify(signingInput, jwt.getSignature())) {
+                    return true;
+                }
+            } catch (Exception e) {
+                LOG.debugf("Status list signature check with issuer key failed: %s", e.getMessage());
+            }
+        }
+        return false;
+    }
+
+    private static String issuerDomain(StatusListTrust trust) {
+        return trust.issuer() != null ? "issuer:" + trust.issuer() : TRUST_ANCHOR_DOMAIN;
     }
 
     /**
@@ -234,6 +323,7 @@ public class StatusListVerifier {
         if (session != null) {
             return SimpleHttp.doGet(uri, session)
                     .header("Accept", "application/statuslist+jwt")
+                    .setMaxConsumedResponseSize(MAX_STATUS_LIST_TOKEN_BYTES)
                     .asString();
         }
         // Fallback for tests without KeycloakSession
@@ -241,16 +331,34 @@ public class StatusListVerifier {
     }
 
     static byte[] inflate(byte[] compressed) throws Exception {
-        try (var is = new InflaterInputStream(new ByteArrayInputStream(compressed))) {
-            return is.readAllBytes();
-        } catch (Exception e) {
+        try {
+            return inflateBounded(new Inflater(), compressed);
+        } catch (DataFormatException e) {
             // Fallback: try raw DEFLATE (without zlib header)
-            Inflater rawInflater = new Inflater(true);
-            try (var is = new InflaterInputStream(new ByteArrayInputStream(compressed), rawInflater)) {
-                return is.readAllBytes();
-            } finally {
-                rawInflater.end();
+            return inflateBounded(new Inflater(true), compressed);
+        }
+    }
+
+    /** Inflates with a hard output limit so a small compressed list cannot exhaust memory. */
+    private static byte[] inflateBounded(Inflater inflater, byte[] compressed) throws DataFormatException {
+        try {
+            inflater.setInput(compressed);
+            ByteArrayOutputStream out = new ByteArrayOutputStream(Math.min(compressed.length * 4, 1 << 20));
+            byte[] buffer = new byte[8192];
+            while (!inflater.finished()) {
+                int n = inflater.inflate(buffer);
+                if (n == 0 && (inflater.needsInput() || inflater.needsDictionary())) {
+                    throw new DataFormatException("Truncated or incomplete DEFLATE stream");
+                }
+                if (out.size() + n > MAX_DECOMPRESSED_STATUS_LIST_BYTES) {
+                    throw new IllegalStateException(
+                            "Status list exceeds " + MAX_DECOMPRESSED_STATUS_LIST_BYTES + " bytes when decompressed");
+                }
+                out.write(buffer, 0, n);
             }
+            return out.toByteArray();
+        } finally {
+            inflater.end();
         }
     }
 
@@ -288,9 +396,13 @@ public class StatusListVerifier {
 
     record DecodedStatusList(byte[] statusBits, int bitsPerStatus) {}
 
-    private record CachedStatusList(DecodedStatusList decoded, Instant expiresAt) {
+    private record CachedStatusList(DecodedStatusList decoded, Instant expiresAt, String trustDomain) {
         boolean isValid() {
             return Instant.now().isBefore(expiresAt);
+        }
+
+        boolean usableFor(String domain) {
+            return TRUST_ANCHOR_DOMAIN.equals(trustDomain) || trustDomain.equals(domain);
         }
     }
 

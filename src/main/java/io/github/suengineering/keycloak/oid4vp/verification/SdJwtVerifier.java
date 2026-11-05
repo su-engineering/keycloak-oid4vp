@@ -139,7 +139,9 @@ public class SdJwtVerifier {
             String issuer = stringValue(issuerPayload.get("iss"));
             String vct = stringValue(issuerPayload.get("vct"));
 
-            return new SdJwtVerificationResult(claims, issuer, vct);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> issuerSignedClaims = JsonSerialization.mapper.convertValue(issuerPayload, Map.class);
+            return new SdJwtVerificationResult(claims, issuer, vct, issuerSignedClaims, verifiers);
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {

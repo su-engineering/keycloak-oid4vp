@@ -221,7 +221,7 @@ class StatusListVerifierTest {
     void checkRevocationStatusThrowsWhenCredentialIsRevoked() {
         StatusListVerifier revokedVerifier = new StatusListVerifier() {
             @Override
-            DecodedStatusList fetchAndDecodeStatusList(String uri) {
+            DecodedStatusList fetchAndDecodeStatusList(String uri, StatusListTrust trust) {
                 return new DecodedStatusList(new byte[] {0x01}, 1);
             }
         };
@@ -236,7 +236,7 @@ class StatusListVerifierTest {
     void checkRevocationStatusWrapsUnexpectedVerifierFailures() {
         StatusListVerifier failingVerifier = new StatusListVerifier() {
             @Override
-            DecodedStatusList fetchAndDecodeStatusList(String uri) throws Exception {
+            DecodedStatusList fetchAndDecodeStatusList(String uri, StatusListTrust trust) throws Exception {
                 throw new RuntimeException("simulated status list fetch failure");
             }
         };
@@ -380,5 +380,71 @@ class StatusListVerifierTest {
         Instant expiry = verifier.resolveExpiry(null, -60);
         assertThat(expiry).isAfterOrEqualTo(before);
         assertThat(expiry).isBefore(Instant.now().plusSeconds(2));
+    }
+
+    @Test
+    void inflateRejectsDecompressionBomb() {
+        byte[] zeros = new byte[StatusListVerifier.MAX_DECOMPRESSED_STATUS_LIST_BYTES + 1024];
+        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
+        deflater.setInput(zeros);
+        deflater.finish();
+        byte[] buffer = new byte[1 << 20];
+        int length = deflater.deflate(buffer);
+        deflater.end();
+        byte[] bomb = java.util.Arrays.copyOf(buffer, length);
+
+        assertThatThrownBy(() -> StatusListVerifier.inflate(bomb))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("decompressed");
+    }
+
+    @Test
+    void statusListTokenWithoutAnyTrustIsRejected() throws Exception {
+        com.nimbusds.jose.jwk.ECKey key =
+                new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256).generate();
+        String jwt = signedStatusListToken(key);
+
+        assertThatThrownBy(() -> verifier.verifyStatusListJwtSignature(
+                        jwt, StatusListVerifier.StatusListTrust.trustAnchorsOnly()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("cannot be verified");
+    }
+
+    @Test
+    void statusListTokenSignedByCredentialIssuerKeyIsAccepted() throws Exception {
+        org.keycloak.common.crypto.CryptoIntegration.init(getClass().getClassLoader());
+        com.nimbusds.jose.jwk.ECKey issuerKey =
+                new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256).generate();
+        com.nimbusds.jose.jwk.ECKey otherKey =
+                new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256).generate();
+
+        StatusListVerifier.StatusListTrust trust = new StatusListVerifier.StatusListTrust(
+                "did:web:issuer.example", java.util.List.of(verifierFor(issuerKey)));
+
+        assertThat(verifier.verifyStatusListJwtSignature(signedStatusListToken(issuerKey), trust))
+                .isEqualTo("issuer:did:web:issuer.example");
+        assertThatThrownBy(() -> verifier.verifyStatusListJwtSignature(signedStatusListToken(otherKey), trust))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    private static String signedStatusListToken(com.nimbusds.jose.jwk.ECKey key) throws Exception {
+        com.nimbusds.jose.JWSObject jws = new com.nimbusds.jose.JWSObject(
+                new com.nimbusds.jose.JWSHeader.Builder(com.nimbusds.jose.JWSAlgorithm.ES256)
+                        .type(new com.nimbusds.jose.JOSEObjectType("statuslist+jwt"))
+                        .build(),
+                new com.nimbusds.jose.Payload("{\"sub\":\"https://issuer.example/status\"}"));
+        jws.sign(new com.nimbusds.jose.crypto.ECDSASigner(key));
+        return jws.serialize();
+    }
+
+    private static org.keycloak.crypto.SignatureVerifierContext verifierFor(com.nimbusds.jose.jwk.ECKey key)
+            throws Exception {
+        org.keycloak.crypto.KeyWrapper wrapper = new org.keycloak.crypto.KeyWrapper();
+        wrapper.setPublicKey(key.toECPublicKey());
+        wrapper.setType(org.keycloak.crypto.KeyType.EC);
+        wrapper.setUse(org.keycloak.crypto.KeyUse.SIG);
+        wrapper.setAlgorithm("ES256");
+        wrapper.setCurve("P-256");
+        return org.keycloak.util.KeyWrapperUtil.createSignatureVerifierContext(wrapper);
     }
 }

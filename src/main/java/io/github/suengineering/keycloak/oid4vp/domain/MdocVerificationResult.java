@@ -24,4 +24,13 @@ import java.util.Map;
  * <p>Contains the extracted namespace-prefixed claims and the document type (doctype).
  * Produced by {@link io.github.suengineering.keycloak.oid4vp.verification.MdocVerifier}.
  */
-public record MdocVerificationResult(Map<String, Object> claims, String docType) {}
+public record MdocVerificationResult(Map<String, Object> claims, String docType, Map<String, Object> msoStatus) {
+
+    /**
+     * @param msoStatus the {@code status} member of the signed MobileSecurityObject, or {@code null}
+     *     when the credential carries no status reference
+     */
+    public MdocVerificationResult(Map<String, Object> claims, String docType) {
+        this(claims, docType, null);
+    }
+}
