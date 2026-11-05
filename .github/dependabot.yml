@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    # Security updates only; routine version bumps stay manual.
+    open-pull-requests-limit: 0
+    groups:
+      # bcprov, bcpkix and bcutil must move together: mixed versions fail at runtime.
+      bouncycastle:
+        applies-to: security-updates
+        patterns:
+          - "org.bouncycastle:*"
