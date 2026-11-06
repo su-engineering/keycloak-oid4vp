@@ -330,7 +330,12 @@ public class VpTokenProcessor {
                     Map.of("status", result.issuerSignedClaims().getOrDefault("status", Map.of())),
                     new StatusListVerifier.StatusListTrust(result.issuer(), result.issuerVerifiers()));
             return new VerifiedCredential(
-                    credentialId, result.issuer(), result.credentialType(), result.claims(), PresentationType.SD_JWT);
+                    credentialId,
+                    result.issuer(),
+                    result.credentialType(),
+                    result.claims(),
+                    PresentationType.SD_JWT,
+                    "sd-jwt|" + result.issuer());
         }
 
         if (mdocVerifier.isMdoc(credential)) {
@@ -355,7 +360,13 @@ public class VpTokenProcessor {
                 statusListVerifier.checkRevocationStatus(
                         Map.of("status", result.msoStatus()), StatusListVerifier.StatusListTrust.trustAnchorsOnly());
             }
-            return new VerifiedCredential(credentialId, null, result.docType(), result.claims(), PresentationType.MDOC);
+            return new VerifiedCredential(
+                    credentialId,
+                    null,
+                    result.docType(),
+                    result.claims(),
+                    PresentationType.MDOC,
+                    "mdoc|" + result.docType() + "|" + result.issuingAuthority());
         }
 
         return null;

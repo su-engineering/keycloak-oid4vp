@@ -51,6 +51,9 @@ public class Oid4vpCallbackProcessor {
 
     private static final Logger LOG = Logger.getLogger(Oid4vpCallbackProcessor.class);
 
+    /** Context data key holding the subject-only identity key when issuer scoping produced another one. */
+    public static final String LEGACY_IDENTITY_KEY = "oid4vp.legacyIdentityKey";
+
     private final IdentityProviderModel idpModel;
     private final Oid4vpConfigProvider configProvider;
     private final UserAuthenticationIdentityProvider<?> provider;
@@ -147,6 +150,7 @@ public class Oid4vpCallbackProcessor {
 
         String subject;
         String identityKey;
+        String legacyIdentityKey = null;
         if (configProvider.isTransientUsersEnabled()) {
             subject = buildTransientSubject(requestContext);
             identityKey = primary.generateIdentityKey(subject);
@@ -156,10 +160,19 @@ public class Oid4vpCallbackProcessor {
             identityKey = primary.generateIdentityKey(subject);
         } else {
             subject = extractSubjectFromCredential(claims, primary);
-            identityKey = primary.generateCaseInsensitiveIdentityKey(subject);
+            identityKey = configProvider.isIssuerScopedIdentity() && primary.issuerScope() != null
+                    ? primary.generateIssuerScopedIdentityKey(subject, true)
+                    : primary.generateCaseInsensitiveIdentityKey(subject);
+            if (!identityKey.equals(primary.generateCaseInsensitiveIdentityKey(subject))) {
+                legacyIdentityKey = primary.generateCaseInsensitiveIdentityKey(subject);
+            }
         }
 
         BrokeredIdentityContext context = new BrokeredIdentityContext(identityKey, idpModel);
+        if (legacyIdentityKey != null) {
+            // Lets completion move an account linked under the subject-only key to the scoped key.
+            context.getContextData().put(LEGACY_IDENTITY_KEY, legacyIdentityKey);
+        }
         context.setIdp(provider);
         context.setUsername(subject);
         context.getContextData().put(Oid4vpMapperUtils.CONTEXT_CLAIMS_KEY, claims);
