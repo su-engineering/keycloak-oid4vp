@@ -177,6 +177,17 @@ class SdJwtSupportedAlgorithmsTest {
                                 Date.from(now.plus(365, ChronoUnit.DAYS)),
                                 new X500Principal(dn),
                                 material.publicKey())
+                        .addExtension(
+                                org.bouncycastle.asn1.x509.Extension.subjectAlternativeName,
+                                false,
+                                new org.bouncycastle.asn1.x509.GeneralNames(
+                                        new org.bouncycastle.asn1.x509.GeneralName[] {
+                                            new org.bouncycastle.asn1.x509.GeneralName(
+                                                    org.bouncycastle.asn1.x509.GeneralName.uniformResourceIdentifier,
+                                                    "https://issuer.example"),
+                                            new org.bouncycastle.asn1.x509.GeneralName(
+                                                    org.bouncycastle.asn1.x509.GeneralName.dNSName, "issuer.example")
+                                        }))
                         .build(new JcaContentSignerBuilder(material.certificateSignatureAlgorithm())
                                 .build(material.privateKey())));
     }

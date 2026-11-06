@@ -382,10 +382,48 @@ class SdJwtVerifierTest {
                 Map.of("iss", "https://issuer.example", "vct", "PID"), entityKey, List.of(entityCert));
         String sdJwt = jwt + "~";
 
-        // Neither the x5c chain nor direct key matching should work
+        // A presented x5c that does not anchor ends verification: no direct-key fallback.
         assertThatThrownBy(() -> verifier.verify(sdJwt, null, null, List.of(trustedCaCert)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Signature could not be verified");
+                .hasMessageContaining("not anchored");
+    }
+
+    @Test
+    void verify_x5cLeafThatDoesNotNameTheIssuer_isRejected() throws Exception {
+        // Any certificate anchored in the trust list must not be able to claim any issuer.
+        ECKey caKey = new ECKeyGenerator(Curve.P_256).generate();
+        X509Certificate caCert = generateSelfSignedCert(caKey, "CN=Trusted CA");
+        ECKey entityKey = new ECKeyGenerator(Curve.P_256).generate();
+        X509Certificate entityCert = generateCaSignedCert(entityKey, caKey, caCert, "CN=Diploma Issuer");
+        String sdJwt = buildSignedJwtWithKey(
+                        Map.of("iss", "https://pid.gov.example", "vct", "PID"), entityKey, List.of(entityCert))
+                + "~";
+
+        assertThatThrownBy(() -> verifier.verify(sdJwt, null, null, List.of(caCert)))
+                .hasMessageContaining("does not name issuer https://pid.gov.example");
+    }
+
+    @Test
+    void verify_revokedX5cIssuerIsRejected() throws Exception {
+        ECKey caKey = new ECKeyGenerator(Curve.P_256).generate();
+        X509Certificate caCert = generateSelfSignedCert(caKey, "CN=Trusted CA");
+        ECKey entityKey = new ECKeyGenerator(Curve.P_256).generate();
+        X509Certificate entityCert = generateCaSignedCert(entityKey, caKey, caCert, "CN=Test Issuer");
+        String sdJwt = buildSignedJwtWithKey(
+                        Map.of("iss", "https://issuer.example", "vct", "PID"), entityKey, List.of(entityCert))
+                + "~";
+        CertificateRevocationChecker revokesEverything =
+                new CertificateRevocationChecker(null, CertificateRevocationChecker.Mode.STRICT) {
+                    @Override
+                    Status status(X509Certificate certificate, X509Certificate issuer) {
+                        return Status.REVOKED;
+                    }
+                };
+
+        assertThatThrownBy(() -> new SdJwtVerifier(60, 300)
+                        .withRevocationChecker(revokesEverything)
+                        .verify(sdJwt, null, null, List.of(caCert)))
+                .hasMessageContaining("revoked");
     }
 
     @Test
@@ -582,6 +620,15 @@ class SdJwtVerifierTest {
                 publicKey);
         certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
 
+        certBuilder.addExtension(
+                org.bouncycastle.asn1.x509.Extension.subjectAlternativeName,
+                false,
+                new org.bouncycastle.asn1.x509.GeneralNames(new org.bouncycastle.asn1.x509.GeneralName[] {
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.uniformResourceIdentifier, "https://issuer.example"),
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.dNSName, "issuer.example")
+                }));
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(ecKey.toECPrivateKey());
 
         return new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
@@ -599,6 +646,15 @@ class SdJwtVerifierTest {
                 subjectKey.toECPublicKey());
         certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(false));
 
+        certBuilder.addExtension(
+                org.bouncycastle.asn1.x509.Extension.subjectAlternativeName,
+                false,
+                new org.bouncycastle.asn1.x509.GeneralNames(new org.bouncycastle.asn1.x509.GeneralName[] {
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.uniformResourceIdentifier, "https://issuer.example"),
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.dNSName, "issuer.example")
+                }));
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(caKey.toECPrivateKey());
 
         return new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
