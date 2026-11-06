@@ -52,6 +52,14 @@ import org.keycloak.util.KeyWrapperUtil;
  */
 public class SdJwtVerifier {
 
+    private CertificateRevocationChecker revocationChecker = CertificateRevocationChecker.DISABLED;
+
+    /** Checks issuer certificate chains for revocation (CRL/OCSP) with {@code checker}. */
+    public SdJwtVerifier withRevocationChecker(CertificateRevocationChecker checker) {
+        this.revocationChecker = checker != null ? checker : CertificateRevocationChecker.DISABLED;
+        return this;
+    }
+
     private static final Logger LOG = Logger.getLogger(SdJwtVerifier.class);
 
     private final int clockSkewSeconds;
@@ -271,7 +279,9 @@ public class SdJwtVerifier {
             throw new IllegalStateException("Issuer metadata key has no x5c certificate chain to anchor it");
         }
         try {
-            PublicKey validatedLeafKey = X5cChainValidator.validateCertChain(chain, trustedCertificates);
+            X5cChainValidator.AnchoredChain anchored = X5cChainValidator.anchorChain(chain, trustedCertificates);
+            revocationChecker.check(anchored);
+            PublicKey validatedLeafKey = anchored.leafKey();
             if (!Arrays.equals(
                     validatedLeafKey.getEncoded(), issuerKey.publicKey().getEncoded())) {
                 throw new IllegalStateException("Issuer metadata x5c leaf key does not match the resolved JWK");
