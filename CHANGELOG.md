@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Accept an `x5c` or `x5chain` that includes its trusted issuing CA. Issuers commonly send the CA named in the trust list along with their certificate; such chains were rejected as not anchored unless the CA was self-signed.
 - Support Token Status Lists in CWT form (`application/statuslist+cwt`) alongside JWT. CWT lists are COSE_Sign1 tokens verified through an anchored `x5chain`, a pinned trust-list key, or the referenced credential's issuer keys. Lists are fetched as raw bytes with a 4 MiB limit.
 - **Breaking:** did:web key authorization. The DID document `id` must equal the DID, only `assertionMethod` keys controlled by the DID may sign credentials, and a JOSE `kid` must name one of them.
 - **Breaking:** did:web URLs follow the did:web specification. Path DIDs resolve to `<path>/did.json` and encoded ports (`%3A`) stay in the host. Set `didWebLegacyPathLayout=true` to keep the previous `<path>/.well-known/did.json` layout. DID documents are capped at 256 KiB.

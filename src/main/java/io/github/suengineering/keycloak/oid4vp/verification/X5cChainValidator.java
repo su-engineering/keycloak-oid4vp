@@ -142,6 +142,19 @@ public final class X5cChainValidator {
                 return leaf.getPublicKey();
             }
         }
+        // Issuers often send their issuing CA along with the leaf. When that CA is itself a trusted
+        // anchor, the links verified above already end at it.
+        for (int i = 1; i < chain.size(); i++) {
+            byte[] presented = chain.get(i).getEncoded();
+            for (X509Certificate trusted : currentlyValid(trustedCertificates)) {
+                if (trusted.getBasicConstraints() >= 0 && Arrays.equals(trusted.getEncoded(), presented)) {
+                    LOG.debugf(
+                            "x5c chain contains trusted certificate: %s",
+                            trusted.getSubjectX500Principal().getName());
+                    return leaf.getPublicKey();
+                }
+            }
+        }
         for (X509Certificate trusted : currentlyValid(trustedCertificates)) {
             if (trusted.getBasicConstraints() < 0) {
                 // Only CA certificates may anchor a presented chain.

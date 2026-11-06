@@ -145,6 +145,58 @@ class X5cChainValidatorTest {
     }
 
     @Test
+    void validateCertChain_chainIncludingTrustedIntermediate_isAnchoredThere() throws Exception {
+        // Trust list names an issuing CA whose own root is not trusted; the issuer sends that CA in x5c.
+        KeyPair intermediateKp = generateKeyPair();
+        X509Certificate intermediate = generateCert(
+                intermediateKp,
+                caKeyPair,
+                "CN=PID CA",
+                "CN=Test CA",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(30, ChronoUnit.DAYS),
+                true);
+        KeyPair leafKp = generateKeyPair();
+        X509Certificate leafCert = generateCert(
+                leafKp,
+                intermediateKp,
+                "CN=PID Provider",
+                "CN=PID CA",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+
+        assertThat(X5cChainValidator.validateCertChain(List.of(leafCert, intermediate), List.of(intermediate)))
+                .isEqualTo(leafCert.getPublicKey());
+    }
+
+    @Test
+    void validateCertChain_chainEndingAtUntrustedCa_isRejected() throws Exception {
+        KeyPair leafKp = generateKeyPair();
+        X509Certificate leafCert = generateCert(
+                leafKp,
+                caKeyPair,
+                "CN=Leaf",
+                "CN=Test CA",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+        KeyPair otherKp = generateKeyPair();
+        X509Certificate unrelatedRoot = generateCert(
+                otherKp,
+                otherKp,
+                "CN=Other Root",
+                "CN=Other Root",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                true);
+
+        assertThatThrownBy(() -> X5cChainValidator.validateCertChain(List.of(leafCert, caCert), List.of(unrelatedRoot)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not anchored");
+    }
+
+    @Test
     void validateCertChain_emptyChain_throws() {
         assertThatThrownBy(() -> X5cChainValidator.validateCertChain(List.of(), List.of(caCert)))
                 .isInstanceOf(IllegalStateException.class)
