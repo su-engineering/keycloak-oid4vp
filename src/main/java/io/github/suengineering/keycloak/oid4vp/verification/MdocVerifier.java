@@ -37,6 +37,7 @@ import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -85,6 +86,53 @@ public class MdocVerifier {
             String responseUri,
             String mdocGeneratedNonce,
             byte[] jwkThumbprint) {
+        boolean anySessionContext = clientId != null || nonce != null || responseUri != null;
+        boolean completeSessionContext = clientId != null && nonce != null && responseUri != null;
+        if (anySessionContext && !completeSessionContext) {
+            throw new IllegalStateException(
+                    "mDoc presentation requires device authentication and complete session context");
+        }
+        List<CBORItemList> transcripts = null;
+        if (completeSessionContext) {
+            transcripts = new ArrayList<>();
+            transcripts.add(MdocSessionTranscriptBuilder.buildOid4vp(clientId, nonce, responseUri, jwkThumbprint));
+            if (mdocGeneratedNonce != null && !mdocGeneratedNonce.isBlank()) {
+                transcripts.add(
+                        MdocSessionTranscriptBuilder.buildIso18013_7(clientId, nonce, responseUri, mdocGeneratedNonce));
+            }
+        }
+        return verify(deviceResponseToken, trustedCertificates, transcripts);
+    }
+
+    /**
+     * Full verification of a presentation returned through the Digital Credentials API, with device
+     * authentication bound to the {@code OpenID4VPDCAPIHandover} transcript (OID4VP 1.0 B.2.6.2).
+     *
+     * @param origin the browser origin the request was made from, without the {@code origin:} prefix
+     * @param jwkThumbprint the verifier encryption key thumbprint for {@code dc_api.jwt}, else {@code null}
+     */
+    public MdocVerificationResult verifyDcApi(
+            String deviceResponseToken,
+            List<X509Certificate> trustedCertificates,
+            String origin,
+            String nonce,
+            byte[] jwkThumbprint) {
+        if (StringUtil.isBlank(origin) || StringUtil.isBlank(nonce)) {
+            throw new IllegalStateException(
+                    "mDoc presentation requires device authentication and complete session context");
+        }
+        return verify(
+                deviceResponseToken,
+                trustedCertificates,
+                List.of(MdocSessionTranscriptBuilder.buildDcApi(origin, nonce, jwkThumbprint)));
+    }
+
+    /**
+     * Verifies the document. With {@code transcripts == null} only issuer-side checks run; otherwise
+     * device authentication is required and must verify against one of the candidate transcripts.
+     */
+    private MdocVerificationResult verify(
+            String deviceResponseToken, List<X509Certificate> trustedCertificates, List<CBORItemList> transcripts) {
         try {
             CBORPairList document = parseDocument(decodeBase64(deviceResponseToken));
             CBORPairList mso = parseMso(document);
@@ -100,11 +148,7 @@ public class MdocVerifier {
             if (documentDocType != null && !docType.equals(documentDocType)) {
                 throw new IllegalStateException("Document docType does not match signed MSO");
             }
-            if ((clientId != null || nonce != null || responseUri != null)
-                    && (clientId == null
-                            || nonce == null
-                            || responseUri == null
-                            || val(document, "deviceSigned") == null)) {
+            if (transcripts != null && val(document, "deviceSigned") == null) {
                 throw new IllegalStateException(
                         "mDoc presentation requires device authentication and complete session context");
             }
@@ -113,9 +157,8 @@ public class MdocVerifier {
 
             validateValidity(mso);
             verifyDigests(mso, document);
-            if (clientId != null && nonce != null && responseUri != null && val(document, "deviceSigned") != null) {
-                verifyDeviceAuth(
-                        document, mso, docType, clientId, nonce, responseUri, mdocGeneratedNonce, jwkThumbprint);
+            if (transcripts != null) {
+                verifyDeviceAuth(document, mso, docType, transcripts);
             }
 
             return new MdocVerificationResult(claims, docType, msoStatus(mso));
@@ -254,34 +297,16 @@ public class MdocVerifier {
     }
 
     private void verifyDeviceAuth(
-            CBORPairList document,
-            CBORPairList mso,
-            String docType,
-            String clientId,
-            String nonce,
-            String responseUri,
-            String mdocGeneratedNonce,
-            byte[] jwkThumbprint) {
+            CBORPairList document, CBORPairList mso, String docType, List<CBORItemList> transcripts) {
 
         COSESign1 deviceSign1 = extractDeviceSignature(document);
         PublicKey deviceKey = extractDeviceKey(mso);
         CBORItem deviceNameSpaces = val(map(document, "deviceSigned"), "nameSpaces");
         if (deviceNameSpaces == null) deviceNameSpaces = new CBORPairList(List.of());
 
-        // Try OID4VP 1.0 first (default)
-        CBORItemList oid4vpTranscript =
-                MdocSessionTranscriptBuilder.buildOid4vp(clientId, nonce, responseUri, jwkThumbprint);
-        if (tryVerifyDevice(deviceSign1, deviceKey, oid4vpTranscript, docType, deviceNameSpaces)) {
-            LOG.debug("Device auth verified using OID4VP 1.0 transcript");
-            return;
-        }
-
-        // Fallback to ISO 18013-7 if mdocGeneratedNonce is present
-        if (mdocGeneratedNonce != null && !mdocGeneratedNonce.isBlank()) {
-            CBORItemList isoTranscript =
-                    MdocSessionTranscriptBuilder.buildIso18013_7(clientId, nonce, responseUri, mdocGeneratedNonce);
-            if (tryVerifyDevice(deviceSign1, deviceKey, isoTranscript, docType, deviceNameSpaces)) {
-                LOG.debug("Device auth verified using ISO 18013-7 transcript");
+        // Candidates are ordered by preference: the OID4VP 1.0 transcript first, then any fallback.
+        for (CBORItemList transcript : transcripts) {
+            if (tryVerifyDevice(deviceSign1, deviceKey, transcript, docType, deviceNameSpaces)) {
                 return;
             }
         }

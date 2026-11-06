@@ -102,4 +102,52 @@ class MdocSessionTranscriptBuilderTest {
 
         assertThat(first.encode()).isEqualTo(second.encode());
     }
+
+    @Test
+    void buildDcApi_hashesOriginNonceAndNullThumbprint() throws Exception {
+        String origin = "https://login.example.com";
+        CBORItemList transcript = MdocSessionTranscriptBuilder.buildDcApi(origin, NONCE, null);
+
+        assertThat(transcript.getItems().get(0)).isInstanceOf(CBORNull.class);
+        assertThat(transcript.getItems().get(1)).isInstanceOf(CBORNull.class);
+        CBORItemList handover = (CBORItemList) transcript.getItems().get(2);
+        assertThat(((CBORString) handover.getItems().get(0)).getValue()).isEqualTo("OpenID4VPDCAPIHandover");
+
+        // OID4VP 1.0 B.2.6.2: SHA-256 over CBOR [origin, nonce, null], encoded by hand here.
+        java.io.ByteArrayOutputStream info = new java.io.ByteArrayOutputStream();
+        info.write(0x83);
+        writeCborText(info, origin);
+        writeCborText(info, NONCE);
+        info.write(0xf6);
+        byte[] expected = java.security.MessageDigest.getInstance("SHA-256").digest(info.toByteArray());
+        assertThat(((CBORByteArray) handover.getItems().get(1)).getValue()).isEqualTo(expected);
+    }
+
+    @Test
+    void buildDcApi_thumbprintAndOriginChangeTheHash() {
+        String origin = "https://login.example.com";
+        byte[] plain = handoverHash(MdocSessionTranscriptBuilder.buildDcApi(origin, NONCE, null));
+        byte[] encrypted = handoverHash(MdocSessionTranscriptBuilder.buildDcApi(origin, NONCE, new byte[] {9, 9}));
+        byte[] otherOrigin =
+                handoverHash(MdocSessionTranscriptBuilder.buildDcApi("https://other.example", NONCE, null));
+
+        assertThat(plain).isNotEqualTo(encrypted).isNotEqualTo(otherOrigin);
+    }
+
+    private static byte[] handoverHash(CBORItemList transcript) {
+        return ((CBORByteArray)
+                        ((CBORItemList) transcript.getItems().get(2)).getItems().get(1))
+                .getValue();
+    }
+
+    private static void writeCborText(java.io.ByteArrayOutputStream out, String value) {
+        byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (bytes.length < 24) {
+            out.write(0x60 | bytes.length);
+        } else {
+            out.write(0x78);
+            out.write(bytes.length);
+        }
+        out.writeBytes(bytes);
+    }
 }

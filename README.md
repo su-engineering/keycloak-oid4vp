@@ -21,8 +21,8 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | **Certificate-based verification** | X.509 issuer verification against a signed ETSI TS 119 602 List of Trusted Entities (JSON/JWT binding); issuer-metadata keys are accepted only with an anchored certificate chain. |
 | **Revocation** | Token Status List in JWT and CWT form for SD-JWT and mDoc; status list signatures are always verified. |
 | **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
-| **Wallet interaction** | Same-device links and cross-device QR codes, with status polling to resume browser login. |
-| **Presentation requests** | Multiple credentials per login, DCQL required/alternative sets and verified claim conditions; `direct_post` and encrypted `direct_post.jwt` responses. |
+| **Wallet interaction** | Same-device links, cross-device QR codes with status polling, and wallets in the same browser through the W3C Digital Credentials API. |
+| **Presentation requests** | Multiple credentials per login, DCQL required/alternative sets and verified claim conditions; `direct_post`, `direct_post.jwt`, `dc_api` and `dc_api.jwt` responses. |
 | **Keycloak integration** | Claim-to-user-attribute and claim-to-session-note mappers; optional transient users. |
 | **Login themes** | Neutral `su-engineering` and OpenKYC `openkyc`; select per realm. |
 

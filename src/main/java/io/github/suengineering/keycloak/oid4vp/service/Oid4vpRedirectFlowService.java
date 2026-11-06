@@ -104,6 +104,57 @@ public class Oid4vpRedirectFlowService {
         return new SignedRequestObject(jwt, encryptionKeyJson);
     }
 
+    /**
+     * Builds the request passed to {@code navigator.credentials.get()} for the Digital Credentials
+     * API (OID4VP 1.0 Appendix A). Returns {@code {protocol, data}}.
+     *
+     * <p>When the client ID scheme is certificate-bound and a verifier certificate is configured, the
+     * request is a signed request object
+     * ({@code openid4vp-v1-signed}) carrying {@code client_id} and {@code expected_origins}; otherwise
+     * it is an unsigned request ({@code openid4vp-v1-unsigned}) and the wallet binds the response to
+     * the browser origin alone. Neither variant carries {@code state} or {@code response_uri}: the
+     * browser API keeps the binding itself.
+     *
+     * @param params request values; {@code responseMode} must be {@code dc_api} or {@code dc_api.jwt}
+     * @param origin the Keycloak origin the login page is served from
+     */
+    public Map<String, Object> buildDcApiRequest(RequestObjectParams params, String origin) {
+        if (!params.responseMode().isDcApi()) {
+            throw new IllegalArgumentException("Digital Credentials API requests need a dc_api response mode");
+        }
+        Oid4vpJwk responseEncryptionKey = resolveResponseEncryptionKey(params);
+        var claims = new LinkedHashMap<String, Object>();
+        claims.put(OAuth2Constants.RESPONSE_TYPE, VP_TOKEN);
+        claims.put(OIDCLoginProtocol.RESPONSE_MODE_PARAM, params.responseMode().parameterValue());
+        claims.put(OIDCLoginProtocol.NONCE_PARAM, params.nonce());
+        claims.put(CLIENT_METADATA, buildClientMetadata(responseEncryptionKey));
+        addDcqlAndVerifierInfo(claims, params.dcqlQuery(), params.verifierInfo());
+
+        Oid4vpClientIdScheme scheme = Oid4vpClientIdScheme.resolve(params.clientIdScheme());
+        var request = new LinkedHashMap<String, Object>();
+        if (!scheme.isCertificateBound() || StringUtil.isBlank(params.x509CertPem())) {
+            // Without a verifier certificate the wallet has nothing to check a signature against.
+            request.put("protocol", DC_API_PROTOCOL_UNSIGNED);
+            request.put("data", claims);
+            return request;
+        }
+
+        Instant now = Instant.now();
+        var signedClaims = new LinkedHashMap<String, Object>();
+        signedClaims.put("jti", UUID.randomUUID().toString());
+        signedClaims.put("iat", now.getEpochSecond());
+        signedClaims.put("exp", now.plusSeconds(requestObjectLifespanSeconds).getEpochSecond());
+        signedClaims.put("aud", SELF_ISSUED_V2);
+        signedClaims.put(OAuth2Constants.CLIENT_ID, params.clientId());
+        signedClaims.put(EXPECTED_ORIGINS, List.of(origin));
+        signedClaims.putAll(claims);
+        KeyWrapper signingKey = resolveSigningKey(params.x509SigningKeyJwk());
+        String jwt = signRequestObject(signingKey, params.clientIdScheme(), params.x509CertPem(), signedClaims);
+        request.put("protocol", DC_API_PROTOCOL_SIGNED);
+        request.put("data", Map.of("request", jwt));
+        return request;
+    }
+
     private Oid4vpJwk resolveResponseEncryptionKey(RequestObjectParams params) {
         if (!params.responseMode().requiresEncryption()) {
             return null;
@@ -207,9 +258,6 @@ public class Oid4vpRedirectFlowService {
     }
 
     private Map<String, Object> buildClientMetadata(Oid4vpJwk responseEncryptionKey) {
-        Map<String, Object> jwk =
-                parseJsonObject(responseEncryptionKey.toPublicJwk().toJson());
-
         var vpFormats = new LinkedHashMap<String, Object>();
         vpFormats.put(
                 FORMAT_SD_JWT_VC,
@@ -223,8 +271,12 @@ public class Oid4vpRedirectFlowService {
                         "deviceauth_alg_values", SUPPORTED_MDOC_DEVICEAUTH_ALG_VALUES));
 
         var meta = new LinkedHashMap<String, Object>();
-        meta.put("jwks", Map.of("keys", List.of(jwk)));
-        meta.put("encrypted_response_enc_values_supported", SUPPORTED_VERIFIER_RESPONSE_ENCRYPTION_METHOD_VALUES);
+        if (responseEncryptionKey != null) {
+            Map<String, Object> jwk =
+                    parseJsonObject(responseEncryptionKey.toPublicJwk().toJson());
+            meta.put("jwks", Map.of("keys", List.of(jwk)));
+            meta.put("encrypted_response_enc_values_supported", SUPPORTED_VERIFIER_RESPONSE_ENCRYPTION_METHOD_VALUES);
+        }
         meta.put("vp_formats_supported", vpFormats);
         return meta;
     }

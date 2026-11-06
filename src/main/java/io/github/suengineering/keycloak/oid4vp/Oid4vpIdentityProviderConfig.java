@@ -51,6 +51,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public static final String SAME_DEVICE_ENABLED = "sameDeviceEnabled";
     public static final String CROSS_DEVICE_ENABLED = "crossDeviceEnabled";
+    public static final String DC_API_ENABLED = "dcApiEnabled";
     public static final String WALLET_SCHEME = "walletScheme";
 
     public static final String CLIENT_ID_SCHEME = "clientIdScheme";
@@ -171,6 +172,14 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public void setCrossDeviceEnabled(boolean enabled) {
         getConfig().put(CROSS_DEVICE_ENABLED, String.valueOf(enabled));
+    }
+
+    public boolean isDcApiEnabled() {
+        return getBoolConfig(DC_API_ENABLED, false);
+    }
+
+    public void setDcApiEnabled(boolean enabled) {
+        getConfig().put(DC_API_ENABLED, String.valueOf(enabled));
     }
 
     public String getWalletScheme() {

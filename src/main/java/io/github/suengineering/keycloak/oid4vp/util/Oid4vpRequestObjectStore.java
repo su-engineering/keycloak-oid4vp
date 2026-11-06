@@ -79,7 +79,41 @@ public class Oid4vpRequestObjectStore {
             String encryptionJwkThumbprint,
             List<String> configuredCredentialTypes,
             String dcqlQuery,
-            String identityCredentialId) {}
+            String identityCredentialId,
+            String origin) {
+
+        /** Redirect-flow request context; {@code origin} is only set for the Digital Credentials API flow. */
+        public RequestContextEntry(
+                String requestHandle,
+                String rootSessionId,
+                String tabId,
+                String state,
+                String effectiveClientId,
+                String responseUri,
+                String flow,
+                String nonce,
+                String encryptionKeyJson,
+                String encryptionJwkThumbprint,
+                List<String> configuredCredentialTypes,
+                String dcqlQuery,
+                String identityCredentialId) {
+            this(
+                    requestHandle,
+                    rootSessionId,
+                    tabId,
+                    state,
+                    effectiveClientId,
+                    responseUri,
+                    flow,
+                    nonce,
+                    encryptionKeyJson,
+                    encryptionJwkThumbprint,
+                    configuredCredentialTypes,
+                    dcqlQuery,
+                    identityCredentialId,
+                    null);
+        }
+    }
 
     /** Stores a request handle → stable flow context mapping. Called when the login page is rendered. */
     public void storeFlowHandle(KeycloakSession session, String requestHandle, FlowContextEntry entry) {

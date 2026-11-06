@@ -16,6 +16,8 @@
  */
 package io.github.suengineering.keycloak.oid4vp.verification;
 
+import static io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants.ORIGIN_AUDIENCE_PREFIX;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -81,7 +83,47 @@ public class VpTokenProcessor {
             String alternateResponseUri,
             String mdocGeneratedNonce,
             String encryptionJwkThumbprint,
-            String dcqlQuery) {}
+            String dcqlQuery,
+            String dcApiOrigin) {
+
+        /** Redirect-flow request: presentations are bound to the client ID and response URI. */
+        public Request(
+                String vpToken,
+                String clientId,
+                String expectedNonce,
+                String alternateResponseUri,
+                String mdocGeneratedNonce,
+                String encryptionJwkThumbprint,
+                String dcqlQuery) {
+            this(
+                    vpToken,
+                    clientId,
+                    expectedNonce,
+                    alternateResponseUri,
+                    mdocGeneratedNonce,
+                    encryptionJwkThumbprint,
+                    dcqlQuery,
+                    null);
+        }
+
+        /**
+         * Digital Credentials API request (OID4VP 1.0 Appendix A.4): every presentation is bound to
+         * the browser origin, so the SD-JWT audience is {@code origin:<origin>} and mdoc uses the
+         * {@code OpenID4VPDCAPIHandover} transcript.
+         */
+        public static Request forDcApi(
+                String vpToken, String origin, String expectedNonce, String encryptionJwkThumbprint, String dcqlQuery) {
+            return new Request(
+                    vpToken,
+                    ORIGIN_AUDIENCE_PREFIX + origin,
+                    expectedNonce,
+                    null,
+                    null,
+                    encryptionJwkThumbprint,
+                    dcqlQuery,
+                    origin);
+        }
+    }
 
     public VpTokenProcessor(ObjectMapper objectMapper, Config config) {
         this.sdJwtVerifier = new SdJwtVerifier(
@@ -151,7 +193,8 @@ public class VpTokenProcessor {
                             trustedCerts,
                             request.alternateResponseUri(),
                             request.mdocGeneratedNonce(),
-                            request.encryptionJwkThumbprint());
+                            request.encryptionJwkThumbprint(),
+                            request.dcApiOrigin());
                     if (credential == null) throw new IdentityBrokerException("Unsupported VP token format for " + id);
                     dcql.validateCredential(credential);
                     credentials.add(credential);
@@ -210,7 +253,8 @@ public class VpTokenProcessor {
             List<X509Certificate> trustedCerts,
             String alternateResponseUri,
             String mdocGeneratedNonce,
-            String encryptionJwkThumbprint) {
+            String encryptionJwkThumbprint,
+            String dcApiOrigin) {
 
         if (sdJwtVerifier.isSdJwt(credential)) {
             SdJwtVerificationResult result =
@@ -234,14 +278,16 @@ public class VpTokenProcessor {
         if (mdocVerifier.isMdoc(credential)) {
             // Use alternateResponseUri as the response_uri for session transcript
             byte[] jwkThumbprintBytes = decodeJwkThumbprint(encryptionJwkThumbprint);
-            MdocVerificationResult result = mdocVerifier.verifyWithTrustedCerts(
-                    credential,
-                    trustedCerts,
-                    clientId,
-                    expectedNonce,
-                    alternateResponseUri,
-                    mdocGeneratedNonce,
-                    jwkThumbprintBytes);
+            MdocVerificationResult result = dcApiOrigin != null
+                    ? mdocVerifier.verifyDcApi(credential, trustedCerts, dcApiOrigin, expectedNonce, jwkThumbprintBytes)
+                    : mdocVerifier.verifyWithTrustedCerts(
+                            credential,
+                            trustedCerts,
+                            clientId,
+                            expectedNonce,
+                            alternateResponseUri,
+                            mdocGeneratedNonce,
+                            jwkThumbprintBytes);
             // mDoc status lives in the signed MobileSecurityObject, never in disclosed elements.
             if (result.msoStatus() != null) {
                 statusListVerifier.checkRevocationStatus(

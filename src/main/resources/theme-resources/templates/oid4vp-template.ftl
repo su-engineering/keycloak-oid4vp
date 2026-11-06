@@ -154,6 +154,10 @@
         .openkyc-requirement__eyebrow { font: 400 11px/1.3 'JetBrains Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-mist); }
         .openkyc-requirement__name { font: 600 13px/1.4 'Inter', sans-serif; color: var(--color-vault-white); word-break: break-word; }
         .openkyc-primary { display: grid; gap: 12px; }
+        .openkyc-primary[hidden], .openkyc-wallet-button[hidden], .openkyc-dc-api-status[hidden] { display: none; }
+        button.openkyc-wallet-button { font: inherit; text-align: left; cursor: pointer; }
+        button.openkyc-wallet-button:disabled { opacity: 0.6; cursor: progress; transform: none; }
+        .openkyc-dc-api-status { margin: 0; font: 400 13px/1.5 'Inter', sans-serif; color: var(--color-mist); }
         .openkyc-wallet-button {
             display: flex;
             align-items: center;

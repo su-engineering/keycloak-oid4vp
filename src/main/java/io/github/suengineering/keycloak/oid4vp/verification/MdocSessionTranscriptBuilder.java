@@ -62,6 +62,7 @@ import org.keycloak.crypto.JavaAlgorithm;
 final class MdocSessionTranscriptBuilder {
 
     private static final String HANDOVER_TYPE = "OpenID4VPHandover";
+    private static final String DC_API_HANDOVER_TYPE = "OpenID4VPDCAPIHandover";
     private static final String HASH_ALGORITHM = JavaAlgorithm.SHA256;
 
     private MdocSessionTranscriptBuilder() {}
@@ -86,6 +87,29 @@ final class MdocSessionTranscriptBuilder {
 
         CBORItemList handover = new CBORItemList(new CBORString(HANDOVER_TYPE), new CBORByteArray(hash));
 
+        return new CBORItemList(CBORNull.INSTANCE, CBORNull.INSTANCE, handover);
+    }
+
+    /**
+     * Builds the OID4VP 1.0 Digital Credentials API SessionTranscript (Appendix B.2.6.2).
+     *
+     * <pre>
+     * OpenID4VPDCAPIHandover = ["OpenID4VPDCAPIHandover", SHA-256(CBOR([origin, nonce, jwkThumbprint]))]
+     * </pre>
+     *
+     * @param origin the browser origin, not prefixed with {@code origin:}
+     * @param nonce the request nonce
+     * @param jwkThumbprint the verifier encryption key thumbprint for {@code dc_api.jwt}, else {@code null}
+     */
+    static CBORItemList buildDcApi(String origin, String nonce, byte[] jwkThumbprint) {
+        CBORItemList info = new CBORItemList(
+                new CBORString(origin),
+                new CBORString(nonce),
+                jwkThumbprint != null && jwkThumbprint.length > 0
+                        ? new CBORByteArray(jwkThumbprint)
+                        : CBORNull.INSTANCE);
+        CBORItemList handover =
+                new CBORItemList(new CBORString(DC_API_HANDOVER_TYPE), new CBORByteArray(sha256(info.encode())));
         return new CBORItemList(CBORNull.INSTANCE, CBORNull.INSTANCE, handover);
     }
 

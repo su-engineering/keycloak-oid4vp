@@ -87,6 +87,7 @@ This mode is intended for credentials that do not carry a stable account identif
 |-----|-------------|---------|
 | `sameDeviceEnabled` | Enables same-device wallet login. | `true` |
 | `crossDeviceEnabled` | Enables cross-device QR-code wallet login. | `true` |
+| `dcApiEnabled` | Offers a wallet in the same browser through the W3C Digital Credentials API. See [Digital Credentials API](#digital-credentials-api). | `false` |
 | `walletScheme` | URI scheme used to invoke the wallet app. | `openid4vp://` |
 | `responseMode` | Wallet callback response mode: `direct_post` or `direct_post.jwt`. | `direct_post` |
 
@@ -153,6 +154,21 @@ Trust lists are cached until the earliest of ETSI `ListAndSchemeInformation.Next
 | `trustListMaxCacheTtlSeconds` | Optional maximum cache TTL for trust lists. The effective lifetime is capped earlier by ETSI `NextUpdate` and HTTP cache headers. | *(use trust-list freshness metadata)* |
 | `trustListMaxStaleAgeSeconds` | Maximum age of an expired trust-list cache entry that may be reused when refresh fails. Set `0` to disable stale fallback. | `86400` |
 | `issuerMetadataMaxCacheTtlSeconds` | Optional maximum cache TTL for JWT VC issuer metadata and resolved issuer JWKS. The effective lifetime is capped earlier by HTTP `Cache-Control` and any JWK `exp`. Set `0` to disable issuer-metadata caching. | `86400` |
+
+### Digital Credentials API
+
+With `dcApiEnabled=true` the login page loads `oid4vp-dc-api.js`, which shows "Use a wallet in this browser" only when the browser exposes `DigitalCredential` and `navigator.credentials.get()`. Other browsers see the page unchanged.
+
+| Setting | Request sent to the browser |
+|---------|-----------------------------|
+| Client ID scheme `x509_san_dns` or `x509_hash` with `x509CertificatePem` set | Signed request object (`openid4vp-v1-signed`) with `client_id` and `expected_origins` |
+| `plain`, or no verifier certificate | Unsigned request (`openid4vp-v1-unsigned`) |
+| `responseMode=direct_post.jwt`, or `enforceHaip=true` | `response_mode=dc_api.jwt` with an ephemeral P-256 key in `client_metadata` |
+| `responseMode=direct_post` | `response_mode=dc_api` |
+
+`expected_origins` and the presentation binding use the origin of Keycloak's front-end URL, so the login page must be served from that origin (set `hostname` when Keycloak runs behind a proxy). The wallet binds every presentation to that origin: the SD-JWT key binding JWT `aud` must be `origin:<origin>`, and mDoc device authentication must use the `OpenID4VPDCAPIHandover` transcript. A presentation made for a redirect flow, or for another site, is rejected.
+
+The flow is not offered while `useIdTokenSubject` is on, because the browser API returns no SIOP ID token. Trust lists, status lists, issuer allowlists and mappers apply as in the redirect flows.
 
 ### Cross-Device Status Polling
 

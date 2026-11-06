@@ -74,6 +74,10 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
     private static final String DEFAULT_WALLET_INTERNAL_BASE_URL = "http://oid4vc-dev:8085";
     private static final String ENCRYPTED_WALLET_INTERNAL_BASE_URL = "http://oid4vc-enc:8085";
     private static final String ISO_WALLET_INTERNAL_BASE_URL = "http://oid4vc-iso:8085";
+    // The Digital Credentials API needs a newer wallet than the redirect-flow tests pin.
+    private static final DockerImageName DC_API_WALLET_IMAGE =
+            DockerImageName.parse("ghcr.io/eudi-dev/eudi-dev:v3.8.0");
+    static final String DC_API_WALLET_INTERNAL_BASE_URL = "http://eudi-dcapi:8085";
     private static final String JACOCO_AGENT_VERSION = "0.8.13";
     private static final Path PROVIDER_JAR =
             Path.of("target/keycloak-extension-oid4vp.jar").toAbsolutePath();
@@ -94,6 +98,7 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
     private final Oid4vcContainer wallet;
     private final Oid4vcContainer encryptedRequestWallet;
     private final Oid4vcContainer isoWallet;
+    private final GenericContainer<?> dcApiWallet;
     private final Oid4vpTestCallbackServer callback;
     private final KeycloakAdminClient adminClient;
     private final Playwright playwright;
@@ -140,11 +145,35 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
                 .withStatusList()
                 .withBaseUrl(ISO_WALLET_INTERNAL_BASE_URL)
                 .withSessionTranscript("iso");
+        dcApiWallet = new GenericContainer<>(DC_API_WALLET_IMAGE)
+                .withNetwork(network)
+                .withNetworkAliases("eudi-dcapi")
+                .withExposedPorts(8085)
+                .withCommand(
+                        "wallet",
+                        "serve",
+                        "--listen",
+                        "0.0.0.0",
+                        "--port",
+                        "8085",
+                        "--auto-accept",
+                        "--pid",
+                        "--base-url",
+                        DC_API_WALLET_INTERNAL_BASE_URL)
+                .withLogConsumer(frame ->
+                        LOG.info("[DC API wallet] {}", frame.getUtf8String().stripTrailing()))
+                .waitingFor(Wait.forHttp("/api/trustlists").forPort(8085).withStartupTimeout(Duration.ofSeconds(120)));
         wallet.start();
         encryptedRequestWallet.start();
         isoWallet.start();
+        dcApiWallet.start();
 
         Path walletTlsBundle = exportWalletTlsCertificatesToFile(wallet, encryptedRequestWallet, isoWallet);
+        // Status lists of the DC API wallet are served over HTTPS under the wallet CA.
+        Files.writeString(
+                walletTlsBundle,
+                System.lineSeparator() + dcApiWalletCaPem() + System.lineSeparator(),
+                java.nio.file.StandardOpenOption.APPEND);
         keycloak = new GenericContainer<>(
                         "quay.io/keycloak/keycloak:" + System.getProperty("keycloak.test.version", "26.8.1"))
                 .withNetwork(network)
@@ -235,6 +264,11 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         return encryptedRequestWallet;
     }
 
+    /** A wallet that serves the Digital Credentials API ({@code POST /api/dc-api}). */
+    public GenericContainer<?> dcApiWallet() {
+        return dcApiWallet;
+    }
+
     public Oid4vcContainer isoWallet() {
         return isoWallet;
     }
@@ -287,6 +321,9 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
                 walletContainer.stop();
             }
         }
+        if (dcApiWallet != null) {
+            dcApiWallet.stop();
+        }
         if (network != null) {
             network.close();
         }
@@ -306,6 +343,16 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
         } finally {
             instance = null;
         }
+    }
+
+    private String dcApiWalletCaPem() throws Exception {
+        String output = dcApiWallet.execInContainer("eudi", "trust", "ca-cert").getStdout();
+        int begin = output.indexOf("-----BEGIN CERTIFICATE-----");
+        int end = output.indexOf("-----END CERTIFICATE-----");
+        if (begin < 0 || end < 0) {
+            throw new IllegalStateException("DC API wallet printed no CA certificate: " + output);
+        }
+        return output.substring(begin, end + "-----END CERTIFICATE-----".length());
     }
 
     private Path exportWalletTlsCertificatesToFile(Oid4vcContainer... walletContainers) throws Exception {
