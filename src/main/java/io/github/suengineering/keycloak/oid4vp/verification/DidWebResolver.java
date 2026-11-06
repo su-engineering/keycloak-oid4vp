@@ -196,7 +196,17 @@ public class DidWebResolver implements DidResolver {
      */
     String transformToUrl(String didWebId) {
         if (legacyPathLayout) {
+            // Earlier releases decoded before splitting. Keep that layout, but never let decoded
+            // characters choose another host, user info, query or fragment.
             String[] parts = URLDecoder.decode(didWebId, StandardCharsets.UTF_8).split(":");
+            if (!parts[0].matches("[A-Za-z0-9.-]+")) {
+                throw new DidResolutionException("Invalid did:web host: " + parts[0]);
+            }
+            for (int i = 1; i < parts.length; i++) {
+                if (!isSafeSegment(parts[i])) {
+                    throw new DidResolutionException("Invalid did:web path segment: " + parts[i]);
+                }
+            }
             if (parts.length == 1) {
                 return "https://" + parts[0] + WELL_KNOWN_PATH;
             }
@@ -217,17 +227,23 @@ public class DidWebResolver implements DidResolver {
         StringBuilder path = new StringBuilder();
         for (int i = 1; i < parts.length; i++) {
             String segment = URLDecoder.decode(parts[i], StandardCharsets.UTF_8);
-            if (segment.isEmpty()
-                    || segment.equals(".")
-                    || segment.equals("..")
-                    || segment.contains("/")
-                    || segment.contains("?")
-                    || segment.contains("#")) {
+            if (!isSafeSegment(segment)) {
                 throw new DidResolutionException("Invalid did:web path segment: " + segment);
             }
             path.append('/').append(parts[i]);
         }
         return "https://" + host + path + "/did.json";
+    }
+
+    private static boolean isSafeSegment(String segment) {
+        return !segment.isEmpty()
+                && !segment.equals(".")
+                && !segment.equals("..")
+                && !segment.contains("/")
+                && !segment.contains("\\")
+                && !segment.contains("?")
+                && !segment.contains("#")
+                && !segment.contains("@");
     }
 
     /**

@@ -681,4 +681,14 @@ class DidWebResolverTest {
                     .isInstanceOf(DidResolutionException.class);
         }
     }
+
+    @org.junit.jupiter.api.Test
+    void legacyLayoutCannotRedirectTheFetchToAnotherHost() {
+        DidWebResolver legacy = new DidWebResolver(null, 60, true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> legacy.transformToUrl("a.com%40127.0.0.1%2Fadmin%3Fx%3D"))
+                .isInstanceOf(DidResolutionException.class);
+        org.assertj.core.api.Assertions.assertThat(legacy.transformToUrl("issuer.example:tenant"))
+                .isEqualTo("https://issuer.example/tenant/.well-known/did.json");
+    }
 }
