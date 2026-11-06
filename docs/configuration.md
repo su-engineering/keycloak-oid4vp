@@ -116,6 +116,9 @@ This mode is intended for credentials that do not carry a stable account identif
 | `trustedAuthoritiesMode` | DCQL `trusted_authorities` mode: `none`, `etsi_tl`, or `aki`. | `none` |
 | `trustListSigningCertPem` | PEM-encoded certificate chain used to verify the trust list JWT signature. Required when `trustListUrl` is set; an unsigned trust list is rejected. | *(none)* |
 | `trustListAllowUnsigned` | **Local testing only.** Accept the trust list without verifying its signature when no signing certificate is configured. | `false` |
+| `vicalUrl` | Optional VICAL (Verified Issuer Certificate Authority List) whose IACA certificates also anchor mDoc issuer chains. See [mDoc issuer trust](#mdoc-issuer-trust). | *(none)* |
+| `vicalSigningCertPem` | PEM certificate(s) the VICAL signature must chain to. Required with `vicalUrl`. | *(none)* |
+| `mdocCertificateProfile` | `none` validates mDoc issuer chains only; `iso18013-5` also enforces the ISO/IEC 18013-5 Annex B certificate profiles. | `none` |
 | `allowedIssuers` | Comma-separated list of allowed SD-JWT issuer (`iss`) values, or `*`. mDoc credentials are not checked against this list because mDoc does not define a standard canonical credential-issuer string equivalent to SD-JWT `iss`. | `*` |
 | `clockSkewSeconds` | Clock skew tolerance for credential verification. | `60` |
 | `kbJwtMaxAgeSeconds` | Maximum accepted age of the SD-JWT KB-JWT `iat` claim. | `300` |
@@ -135,6 +138,16 @@ Every returned credential is matched to its own ID in the DCQL query saved for t
 
 Use one OID4VP IdP instance per trust domain. If `trustListLoTEType` is configured, it must match the fetched trust list's `ListAndSchemeInformation.LoTEType`. If it is left empty, all LoTE types from that trust list are accepted and the provider logs a warning.
 Within the accepted trust list, credential signature verification uses only `.../SvcType/.../Issuance` services.
+
+### mDoc issuer trust
+
+mDoc issuer chains (`x5chain` in `issuerAuth`) are anchored in the trust list's issuance services and, when `vicalUrl` is set, in a VICAL such as the AAMVA list of US mobile driving licence issuers.
+
+- The VICAL is a COSE_Sign1 that must verify with an `x5chain` anchored in `vicalSigningCertPem`; an unsigned or unanchored VICAL is never used. It is cached until its `nextUpdate` (at most 24 hours), a failed refresh reuses the cached list for up to `trustListMaxStaleAge`, and a list past its `notAfter` is rejected.
+- Each VICAL IACA anchors only documents whose signed docType is listed in its `certificateInfo.docType`.
+- If the VICAL cannot be loaded, mDocs are still verified against the trust list alone.
+
+With `mdocCertificateProfile=iso18013-5`, the chain must also meet the ISO/IEC 18013-5 Annex B profiles: the document signer is an end-entity certificate with key usage `digitalSignature` and extended key usage `1.0.18013.5.1.2`, the anchoring IACA is a CA with `keyCertSign`, both carry the same `countryName`, and the MSO `validityInfo.signed` time falls within the document signer's validity. Use it for mobile driving licences. EUDI PID and attestation providers usually follow other profiles, so it is off by default.
 
 ### Revocation (Token Status List)
 

@@ -16,6 +16,7 @@
  */
 package io.github.suengineering.keycloak.oid4vp;
 
+import io.github.suengineering.keycloak.oid4vp.domain.MdocCertificateProfile;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpClientIdScheme;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
@@ -238,6 +239,33 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .helpText("PEM-encoded X.509 certificate used to verify the trust list JWT signature. "
                         + "Required whenever a Trust List URL is set: an unsigned trust list is rejected.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.VICAL_URL)
+                .label("VICAL URL")
+                .helpText("Optional URL of a VICAL (Verified Issuer Certificate Authority List, for example the AAMVA "
+                        + "list of US mobile driving licence issuers). Its IACA certificates anchor mDoc issuer chains "
+                        + "for the docTypes each entry lists, in addition to the trust list.")
+                .type(ProviderConfigProperty.STRING_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.VICAL_SIGNING_CERT_PEM)
+                .label("VICAL Signing Certificate (PEM)")
+                .helpText("PEM certificate(s) the VICAL signature must chain to. Required when a VICAL URL is set.")
+                .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.MDOC_CERTIFICATE_PROFILE)
+                .label("mDoc Certificate Profile")
+                .helpText(
+                        "none: validate mDoc issuer chains only. iso18013-5: also require the ISO/IEC 18013-5 Annex B "
+                                + "profile (document signer with key usage digitalSignature and extended key usage 1.0.18013.5.1.2, "
+                                + "IACA with keyCertSign, matching countryName, MSO signed within the signer validity). Use it "
+                                + "for mobile driving licences; PID and attestation providers often use other profiles.")
+                .type(ProviderConfigProperty.LIST_TYPE)
+                .options(List.of(
+                        MdocCertificateProfile.NONE.configValue(), MdocCertificateProfile.ISO_18013_5.configValue()))
+                .defaultValue(MdocCertificateProfile.NONE.configValue())
                 .add()
                 .property()
                 .name(Oid4vpIdentityProviderConfig.TRUST_LIST_ALLOW_UNSIGNED)

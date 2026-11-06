@@ -18,7 +18,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | --- | --- |
 | **did:web issuer verification** | Opt-in HTTPS DID resolution for SD-JWT issuer keys, including EC and Ed25519; signature, disclosures, and holder binding are verified. |
 | **did:webvh issuer verification** | Opt-in WebVH v1.0 history and witness validation, current assertion keys, and strict key-ID selection. [Setup and limits](docs/did-webvh.md). |
-| **Certificate-based verification** | X.509 issuer verification against a signed ETSI TS 119 602 List of Trusted Entities (JSON/JWT binding); issuer-metadata keys are accepted only with an anchored certificate chain. |
+| **Certificate-based verification** | X.509 issuer verification against a signed ETSI TS 119 602 List of Trusted Entities (JSON/JWT binding); issuer-metadata keys are accepted only with an anchored certificate chain. mDoc issuers can also be anchored in a signed VICAL, with optional ISO 18013-5 certificate profile checks. |
 | **Revocation** | Token Status List in JWT and CWT form for SD-JWT and mDoc; status list signatures are always verified. |
 | **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
 | **Wallet interaction** | Same-device links, cross-device QR codes with status polling, and wallets in the same browser through the W3C Digital Credentials API, including ISO 18013-7 Annex C for Safari and Apple Wallet. |

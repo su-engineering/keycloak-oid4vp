@@ -16,6 +16,7 @@
  */
 package io.github.suengineering.keycloak.oid4vp;
 
+import io.github.suengineering.keycloak.oid4vp.domain.MdocCertificateProfile;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpClientIdScheme;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConfigProvider;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
@@ -69,6 +70,9 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public static final String TRUST_LIST_URL = "trustListUrl";
     public static final String TRUST_LIST_SIGNING_CERT_PEM = "trustListSigningCertPem";
+    public static final String VICAL_URL = "vicalUrl";
+    public static final String VICAL_SIGNING_CERT_PEM = "vicalSigningCertPem";
+    public static final String MDOC_CERTIFICATE_PROFILE = "mdocCertificateProfile";
     public static final String TRUST_LIST_ALLOW_UNSIGNED = "trustListAllowUnsigned";
     public static final String TRUSTED_AUTHORITIES_MODE = "trustedAuthoritiesMode";
     public static final String TRUST_LIST_LOTE_TYPE = "trustListLoTEType";
@@ -275,6 +279,19 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public String getTrustListSigningCertPem() {
         return normalizePemConfigValue(getConfig().get(TRUST_LIST_SIGNING_CERT_PEM));
+    }
+
+    public String getVicalUrl() {
+        String url = getConfig().get(VICAL_URL);
+        return StringUtil.isBlank(url) ? null : url.trim();
+    }
+
+    public String getVicalSigningCertPem() {
+        return normalizePemConfigValue(getConfig().get(VICAL_SIGNING_CERT_PEM));
+    }
+
+    public MdocCertificateProfile getMdocCertificateProfile() {
+        return MdocCertificateProfile.resolve(getConfig().get(MDOC_CERTIFICATE_PROFILE));
     }
 
     public void setTrustListSigningCertPem(String pem) {
