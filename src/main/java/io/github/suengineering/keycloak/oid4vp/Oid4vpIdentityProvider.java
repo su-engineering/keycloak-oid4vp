@@ -122,6 +122,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                                 config.getTrustListLoTEType(),
                                 didResolver,
                                 config.isTrustListAllowUnsigned(),
+                                config.getTrustListServiceTypes(),
+                                config.getTrustListTerritories(),
                                 config.getVicalUrl(),
                                 parseTrustListSigningCerts(config.getVicalSigningCertPem()),
                                 config.getMdocCertificateProfile())));
@@ -255,12 +257,14 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
         List<X509Certificate> trustListSigningCerts =
                 parseTrustListSigningCerts(getConfig().getTrustListSigningCertPem());
         TrustListProvider trustListProvider = new TrustListProvider(
-                session,
-                getConfig().getTrustListUrl(),
-                getConfig().getTrustListMaxCacheTtl(),
-                getConfig().getTrustListMaxStaleAge(),
-                trustListSigningCerts,
-                getConfig().isTrustListAllowUnsigned());
+                        session,
+                        getConfig().getTrustListUrl(),
+                        getConfig().getTrustListMaxCacheTtl(),
+                        getConfig().getTrustListMaxStaleAge(),
+                        trustListSigningCerts,
+                        getConfig().isTrustListAllowUnsigned())
+                .withXmlTrustedListOptions(
+                        getConfig().getTrustListServiceTypes(), getConfig().getTrustListTerritories());
         try {
             List<String> authorityKeyIdentifiers = trustListProvider.getTrustedAuthorityKeyIdentifiers();
             if (authorityKeyIdentifiers.isEmpty()) {

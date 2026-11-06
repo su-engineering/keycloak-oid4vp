@@ -223,6 +223,8 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                         "URL of a signed ETSI TS 119 602 List of Trusted Entities (LoTE) in its JSON/JWT binding. "
                                 + "Its issuance services anchor SD-JWT x5c chains and mDoc document signer certificates; "
                                 + "its revocation services sign status lists. "
+                                + "An ETSI TS 119 612 XML trusted list, or the EU list of trusted lists, is also accepted; "
+                                + "then only the service types in Trusted List Service Types anchor issuers. "
                                 + "If empty, only DID-based SD-JWT issuers (with DID resolution and an issuer allowlist) can be verified.")
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
@@ -253,6 +255,22 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .helpText("PEM-encoded X.509 certificate used to verify the trust list JWT signature. "
                         + "Required whenever a Trust List URL is set: an unsigned trust list is rejected.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.TRUST_LIST_SERVICE_TYPES)
+                .label("Trusted List Service Types (XML)")
+                .helpText("For ETSI TS 119 612 XML trusted lists and the EU list of trusted lists: the service type "
+                        + "URIs (comma-separated) whose granted services anchor credential issuer chains, for example "
+                        + "http://uri.etsi.org/TrstSvc/Svctype/EAA/Q. Leave broad types such as CA/QC out: they would "
+                        + "trust anyone with a qualified certificate. Ignored for JSON/JWT lists of trusted entities.")
+                .type(ProviderConfigProperty.STRING_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.TRUST_LIST_TERRITORIES)
+                .label("Trusted List Territories (XML)")
+                .helpText("When the Trust List URL is the EU list of trusted lists: country codes (comma-separated) of "
+                        + "the national lists to load, for example DE,NL. Empty loads all.")
+                .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
                 .property()
                 .name(Oid4vpIdentityProviderConfig.VICAL_URL)

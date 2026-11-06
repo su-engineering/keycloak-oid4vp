@@ -60,6 +60,7 @@ public class TrustListProvider {
     private static final ConcurrentHashMap<CacheKey, CachedTrustList> CACHE = new ConcurrentHashMap<>();
     private static final Set<String> WARNED_UNSIGNED_TRUST_LISTS = ConcurrentHashMap.newKeySet();
     static final Duration DEFAULT_MAX_STALE_AGE = Duration.ofDays(1);
+    static final long MAX_XML_TRUSTED_LIST_BYTES = 16L * 1024 * 1024;
     private static final String SERVICE_TYPE_SUFFIX_ISSUANCE = "/Issuance";
     private static final String SERVICE_TYPE_SUFFIX_REVOCATION = "/Revocation";
 
@@ -182,6 +183,48 @@ public class TrustListProvider {
         return getTrustedTrustList().certificates();
     }
 
+    private Set<String> xmlServiceTypes = Set.of();
+    private Set<String> xmlTerritories = Set.of();
+
+    /**
+     * Options for ETSI TS 119 612 XML trusted lists: the service types whose granted services are
+     * anchors, and the territories to follow from a list of trusted lists (all when empty).
+     */
+    public TrustListProvider withXmlTrustedListOptions(Set<String> serviceTypes, Set<String> territories) {
+        this.xmlServiceTypes = serviceTypes != null ? Set.copyOf(serviceTypes) : Set.of();
+        this.xmlTerritories = territories != null ? Set.copyOf(territories) : Set.of();
+        return this;
+    }
+
+    private TrustListParseResult loadXmlTrustedList(String xml) {
+        if (xmlServiceTypes.isEmpty()) {
+            LOG.warnf(
+                    "Trusted list %s is an ETSI TS 119 612 XML list, but no service types are configured "
+                            + "(trustListServiceTypes); it contributes no trust anchors",
+                    trustListUrl);
+        }
+        Ts119612TrustList.Result result = Ts119612TrustList.load(
+                xml, signingCertificates, xmlServiceTypes, xmlTerritories, this::fetchXmlTrustedList);
+        return new TrustListParseResult(
+                result.anchors(), result.anchors(), List.of(), result.nextUpdate(), result.type());
+    }
+
+    /** Fetches a national trusted list a LOTL points to. */
+    protected String fetchXmlTrustedList(String url) {
+        if (session == null) throw new IllegalStateException("No KeycloakSession available for HTTP requests");
+        try (SimpleHttp.Response response = SimpleHttp.doGet(url, session)
+                .header("Accept", Ts119612TrustList.TSL_MIME_TYPE + ", application/xml")
+                .setMaxConsumedResponseSize(MAX_XML_TRUSTED_LIST_BYTES)
+                .asResponse()) {
+            if (response.getStatus() != 200) throw new IllegalStateException("HTTP " + response.getStatus());
+            return response.asString();
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e.getMessage(), e);
+        }
+    }
+
     private CachedTrustList getTrustedTrustList() {
         if (trustListUrl == null || trustListUrl.isBlank()) {
             return CachedTrustList.empty();
@@ -197,8 +240,13 @@ public class TrustListProvider {
 
         try {
             FetchedTrustList fetched = fetchTrustListJwt();
-            verifySignature(fetched.jwt());
-            TrustListParseResult result = parseTrustListJwt(fetched.jwt());
+            TrustListParseResult result;
+            if (Ts119612TrustList.looksLikeXml(fetched.jwt())) {
+                result = loadXmlTrustedList(fetched.jwt());
+            } else {
+                verifySignature(fetched.jwt());
+                result = parseTrustListJwt(fetched.jwt());
+            }
             currentLoTEType = result.loTEType;
             Instant now = Instant.now();
             if (result.expiresAt != null && !now.isBefore(result.expiresAt)) {
@@ -293,7 +341,8 @@ public class TrustListProvider {
     protected FetchedTrustList fetchTrustListJwt() throws Exception {
         if (session != null) {
             try (SimpleHttp.Response response = SimpleHttp.doGet(trustListUrl, session)
-                    .header("Accept", "application/jwt")
+                    .header("Accept", "application/jwt, " + Ts119612TrustList.TSL_MIME_TYPE + ";q=0.9")
+                    .setMaxConsumedResponseSize(MAX_XML_TRUSTED_LIST_BYTES)
                     .asResponse()) {
                 return new FetchedTrustList(response.asString(), resolveHttpCacheExpiry(response));
             }
@@ -302,7 +351,12 @@ public class TrustListProvider {
     }
 
     CacheKey cacheKey() {
-        return new CacheKey(trustListUrl, fingerprintCertificates(signingCertificates), maxCacheTtl, maxStaleAge);
+        return new CacheKey(
+                trustListUrl,
+                fingerprintCertificates(signingCertificates),
+                maxCacheTtl,
+                maxStaleAge,
+                new java.util.TreeSet<>(xmlServiceTypes) + "|" + new java.util.TreeSet<>(xmlTerritories));
     }
 
     private static List<String> fingerprintCertificates(List<X509Certificate> certificates) {
@@ -593,7 +647,8 @@ public class TrustListProvider {
             String trustListUrl,
             List<String> signingCertificateFingerprints,
             Duration maxCacheTtl,
-            Duration maxStaleAge) {}
+            Duration maxStaleAge,
+            String xmlOptions) {}
 
     private record CachedTrustList(
             List<X509Certificate> certificates,

@@ -77,6 +77,8 @@ public class VpTokenProcessor {
             String expectedTrustListLoTEType,
             DidResolver didResolver,
             boolean trustListAllowUnsigned,
+            java.util.Set<String> trustListServiceTypes,
+            java.util.Set<String> trustListTerritories,
             String vicalUrl,
             List<X509Certificate> vicalSigningCerts,
             MdocCertificateProfile mdocCertificateProfile) {}
@@ -154,12 +156,13 @@ public class VpTokenProcessor {
                 : new VicalProvider(
                         config.session(), config.vicalUrl(), config.vicalSigningCerts(), config.trustListMaxStaleAge());
         this.trustListProvider = new TrustListProvider(
-                config.session(),
-                config.trustListUrl(),
-                config.trustListMaxCacheTtl(),
-                config.trustListMaxStaleAge(),
-                config.trustListSigningCerts(),
-                config.trustListAllowUnsigned());
+                        config.session(),
+                        config.trustListUrl(),
+                        config.trustListMaxCacheTtl(),
+                        config.trustListMaxStaleAge(),
+                        config.trustListSigningCerts(),
+                        config.trustListAllowUnsigned())
+                .withXmlTrustedListOptions(config.trustListServiceTypes(), config.trustListTerritories());
         this.statusListVerifier =
                 new StatusListVerifier(config.session(), this.trustListProvider, config.statusListMaxCacheTtl());
         this.objectMapper = objectMapper;
