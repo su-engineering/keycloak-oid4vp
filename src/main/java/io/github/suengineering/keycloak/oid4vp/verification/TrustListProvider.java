@@ -356,7 +356,8 @@ public class TrustListProvider {
                 fingerprintCertificates(signingCertificates),
                 maxCacheTtl,
                 maxStaleAge,
-                new java.util.TreeSet<>(xmlServiceTypes) + "|" + new java.util.TreeSet<>(xmlTerritories));
+                new java.util.TreeSet<>(xmlServiceTypes) + "|" + new java.util.TreeSet<>(xmlTerritories)
+                        + "|allowUnsigned=" + allowUnsigned);
     }
 
     private static List<String> fingerprintCertificates(List<X509Certificate> certificates) {

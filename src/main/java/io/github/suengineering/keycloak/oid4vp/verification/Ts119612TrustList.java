@@ -117,6 +117,13 @@ final class Ts119612TrustList {
             try {
                 Parsed national =
                         parse(verifiedDocument(fetch.apply(pointer.location()), pointer.signingCertificates()));
+                if (national.nextUpdate() != null && !Instant.now().isBefore(national.nextUpdate())) {
+                    // A lapsed national list contributes nothing, but must not take the others down.
+                    LOG.warnf(
+                            "Trusted list %s (%s) skipped: its NextUpdate %s has passed",
+                            pointer.location(), pointer.territory(), national.nextUpdate());
+                    continue;
+                }
                 anchors.addAll(anchors(national, serviceTypes));
                 if (national.nextUpdate() != null
                         && (nextUpdate == null || national.nextUpdate().isBefore(nextUpdate))) {

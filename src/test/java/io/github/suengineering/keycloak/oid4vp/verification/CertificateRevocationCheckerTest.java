@@ -283,4 +283,22 @@ class CertificateRevocationCheckerTest {
                 .getCertificate(
                         builder.build(new JcaContentSignerBuilder("SHA256withECDSA").build(issuerKeys.getPrivate())));
     }
+
+    @Test
+    void deltaCrlsAreNotTakenAsComplete() throws Exception {
+        X509v2CRLBuilder builder = new X509v2CRLBuilder(
+                new JcaX509CertificateHolder(ca).getSubject(),
+                Date.from(Instant.now().minus(2, ChronoUnit.HOURS)));
+        builder.setNextUpdate(Date.from(Instant.now().plus(1, ChronoUnit.DAYS)));
+        builder.addExtension(
+                Extension.deltaCRLIndicator, true, new org.bouncycastle.asn1.x509.CRLNumber(BigInteger.ONE));
+        served.put(
+                CRL_URL,
+                builder.build(new JcaContentSignerBuilder("SHA256withECDSA").build(caKeys.getPrivate()))
+                        .getEncoded());
+
+        assertThatThrownBy(
+                        () -> checker(CertificateRevocationChecker.Mode.STRICT).check(chain()))
+                .hasMessageContaining("cannot be determined");
+    }
 }

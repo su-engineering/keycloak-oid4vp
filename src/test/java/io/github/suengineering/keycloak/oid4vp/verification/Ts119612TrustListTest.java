@@ -198,11 +198,15 @@ class Ts119612TrustListTest {
     }
 
     private String nationalList(String territory) throws Exception {
+        return nationalList(territory, Instant.now().plus(30, ChronoUnit.DAYS));
+    }
+
+    private String nationalList(String territory, Instant nextUpdate) throws Exception {
         return "<TrustServiceStatusList xmlns=\"" + Ts119612TrustList.TSL_NS + "\" Id=\"tsl\">"
                 + "<SchemeInformation Id=\"scheme\"><TSLVersionIdentifier>6</TSLVersionIdentifier>"
                 + "<TSLType>" + GENERIC + "</TSLType><SchemeTerritory>" + territory + "</SchemeTerritory>"
                 + "<NextUpdate><dateTime>"
-                + Instant.now().plus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS) + "</dateTime></NextUpdate>"
+                + nextUpdate.truncatedTo(ChronoUnit.SECONDS) + "</dateTime></NextUpdate>"
                 + "</SchemeInformation><TrustServiceProviderList><TrustServiceProvider><TSPServices>"
                 + service(EAA_Q, GRANTED, eaaIssuerCa)
                 + service(EAA_Q, WITHDRAWN, withdrawnCa)
@@ -296,5 +300,22 @@ class Ts119612TrustListTest {
             TransformerFactory.newInstance().newTransformer().transform(new DOMSource(document), new StreamResult(out));
             return out.toString();
         }
+    }
+
+    @Test
+    void aLapsedNationalListIsSkippedWithoutDroppingTheOthers() throws Exception {
+        Map<String, String> served = Map.of(
+                "https://tl.example/de.xml", deOperator.sign(nationalList("DE")),
+                "https://tl.example/nl.xml",
+                        nlOperator.sign(nationalList("NL", Instant.now().minus(1, ChronoUnit.DAYS))));
+        String lotl = lotlOperator.sign(lotl(
+                pointer("https://tl.example/de.xml", "DE", deOperator.certificate),
+                pointer("https://tl.example/nl.xml", "NL", nlOperator.certificate)));
+
+        Ts119612TrustList.Result result =
+                Ts119612TrustList.load(lotl, List.of(lotlOperator.certificate), Set.of(EAA_Q), Set.of(), served::get);
+
+        assertThat(result.anchors()).containsExactly(eaaIssuerCa);
+        assertThat(result.nextUpdate()).isAfter(Instant.now());
     }
 }

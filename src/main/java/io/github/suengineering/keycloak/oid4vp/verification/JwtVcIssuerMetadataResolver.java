@@ -57,6 +57,13 @@ public class JwtVcIssuerMetadataResolver {
     private static final HttpClient HTTP_CLIENT =
             HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
     private static final ConcurrentHashMap<CacheKey, CachedIssuerKeys> CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_CACHED_ISSUERS = 1000;
+
+    /** Issuer URLs come from presented credentials, so the cache is bounded. */
+    private static void putBounded(CacheKey key, CachedIssuerKeys value) {
+        if (CACHE.size() >= MAX_CACHED_ISSUERS) CACHE.clear();
+        CACHE.put(key, value);
+    }
 
     private final KeycloakSession session;
     private final Duration maxCacheTtl;
@@ -88,7 +95,7 @@ public class JwtVcIssuerMetadataResolver {
 
         CachedIssuerKeys refreshed = fetchIssuerKeys(normalizedIssuer);
         if (refreshed.expiresAt() != null) {
-            CACHE.put(cacheKey, refreshed);
+            putBounded(cacheKey, refreshed);
         } else {
             CACHE.remove(cacheKey);
         }
