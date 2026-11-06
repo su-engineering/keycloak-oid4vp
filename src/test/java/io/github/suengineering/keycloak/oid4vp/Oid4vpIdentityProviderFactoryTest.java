@@ -237,4 +237,45 @@ class Oid4vpIdentityProviderFactoryTest {
                 + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(privateKey.getEncoded())
                 + "\n-----END PRIVATE KEY-----\n";
     }
+
+    @org.junit.jupiter.api.Test
+    void verifierKeySettingsCanComeFromTheVault() {
+        org.keycloak.models.KeycloakSession session =
+                org.mockito.Mockito.mock(org.keycloak.models.KeycloakSession.class);
+        org.keycloak.vault.VaultTranscriber vault = org.mockito.Mockito.mock(org.keycloak.vault.VaultTranscriber.class);
+        org.mockito.Mockito.when(session.vault()).thenReturn(vault);
+        org.mockito.Mockito.when(vault.getStringSecret("${vault.verifier-key}")).thenReturn(secret("PEM FROM VAULT"));
+        org.mockito.Mockito.when(vault.getStringSecret("${vault.missing}")).thenReturn(secret(null));
+
+        Oid4vpIdentityProviderConfig config =
+                new Oid4vpIdentityProviderConfig(new org.keycloak.models.IdentityProviderModel());
+        config.getConfig().put(Oid4vpIdentityProviderConfig.X509_CERTIFICATE_PEM, "${vault.verifier-key}");
+        config.getConfig().put(Oid4vpIdentityProviderConfig.X509_SIGNING_KEY_JWK, "{\"kty\":\"EC\"}");
+        Oid4vpIdentityProviderFactory.resolveVaultReferences(session, config);
+
+        org.assertj.core.api.Assertions.assertThat(
+                        config.getConfig().get(Oid4vpIdentityProviderConfig.X509_CERTIFICATE_PEM))
+                .isEqualTo("PEM FROM VAULT");
+        org.assertj.core.api.Assertions.assertThat(
+                        config.getConfig().get(Oid4vpIdentityProviderConfig.X509_SIGNING_KEY_JWK))
+                .as("plain values are left alone")
+                .isEqualTo("{\"kty\":\"EC\"}");
+
+        config.getConfig().put(Oid4vpIdentityProviderConfig.X509_SIGNING_KEY_JWK, "${vault.missing}");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> Oid4vpIdentityProviderFactory.resolveVaultReferences(session, config))
+                .hasMessageContaining("is missing");
+    }
+
+    private static org.keycloak.vault.VaultStringSecret secret(String value) {
+        return new org.keycloak.vault.VaultStringSecret() {
+            @Override
+            public java.util.Optional<String> get() {
+                return java.util.Optional.ofNullable(value);
+            }
+
+            @Override
+            public void close() {}
+        };
+    }
 }

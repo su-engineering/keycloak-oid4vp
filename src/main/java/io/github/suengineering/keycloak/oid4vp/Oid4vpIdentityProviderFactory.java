@@ -477,6 +477,7 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
         // Validate runtime requirements once the provider is enabled, allowing incremental configuration.
         if (model.isEnabled()) {
             validateTransientUserMode(config);
+            resolveVaultReferences(session, config);
             resolveX509SigningKey(config);
             validateHaipConfig(config);
             warnIfTrustListSignatureIsUnchecked(config);
@@ -587,6 +588,28 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
         return CONFIG_PROPERTIES;
     }
 
+    /**
+     * Resolves {@code ${vault.<name>}} references in the verifier key settings through Keycloak's
+     * vault, so the private key does not have to be stored in the identity provider configuration,
+     * where every administrator who can view identity providers can read it. The resolved value only
+     * lives in this request's in-memory copy of the configuration.
+     */
+    static void resolveVaultReferences(KeycloakSession session, Oid4vpIdentityProviderConfig config) {
+        for (String key : List.of(
+                Oid4vpIdentityProviderConfig.X509_CERTIFICATE_PEM, Oid4vpIdentityProviderConfig.X509_SIGNING_KEY_JWK)) {
+            String value = config.getConfig().get(key);
+            if (value == null || !value.trim().matches("\\$\\{vault\\.[^}]+}")) {
+                continue;
+            }
+            try (org.keycloak.vault.VaultStringSecret secret = session.vault().getStringSecret(value.trim())) {
+                String resolved = secret.get()
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Vault secret " + value.trim() + " for " + key + " is missing"));
+                config.getConfig().put(key, resolved);
+            }
+        }
+    }
+
     public static void resolveX509SigningKey(Oid4vpIdentityProviderConfig config) {
         String existingJwk = config.getX509SigningKeyJwk();
         if (StringUtil.isNotBlank(existingJwk)) {
@@ -630,6 +653,7 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
 
             String jwkJson = Oid4vpSigningKeyParser.serialize(publicKey, privateKey, certChain);
             config.setX509SigningKeyJwk(jwkJson);
+            if (RESOLVED_KEY_CACHE.size() >= 64) RESOLVED_KEY_CACHE.clear();
             RESOLVED_KEY_CACHE.put(pem, jwkJson);
             LOG.debugf(
                     "Resolved x509 signing key from inline PEM (chain size=%d, kid=%s)",
