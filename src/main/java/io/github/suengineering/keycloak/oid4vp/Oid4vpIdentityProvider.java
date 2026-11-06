@@ -32,6 +32,7 @@ import io.github.suengineering.keycloak.oid4vp.util.Oid4vpQrCodeService;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectStore;
 import io.github.suengineering.keycloak.oid4vp.verification.ConfiguredDidResolver;
 import io.github.suengineering.keycloak.oid4vp.verification.DidResolver;
+import io.github.suengineering.keycloak.oid4vp.verification.RegistrationCertificate;
 import io.github.suengineering.keycloak.oid4vp.verification.TrustListProvider;
 import io.github.suengineering.keycloak.oid4vp.verification.VpTokenProcessor;
 import jakarta.ws.rs.core.Response;
@@ -74,6 +75,7 @@ import org.keycloak.utils.StringUtil;
  */
 public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdentityProviderConfig> {
 
+    private static final java.util.Set<String> WARNED_OVER_ASKING = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final Logger LOG = Logger.getLogger(Oid4vpIdentityProvider.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -182,6 +184,33 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
     }
 
     public PreparedDcqlQuery prepareDcqlQueryFromConfig() {
+        PreparedDcqlQuery prepared = buildPreparedDcqlQuery();
+        warnIfOverAsking(prepared.dcqlQuery());
+        return prepared;
+    }
+
+    /** Wallets refuse requests for credentials or claims the registration certificate does not register (ARF RPRC_21). */
+    private void warnIfOverAsking(String dcqlQuery) {
+        String registrationCertificate = getConfig().getRegistrationCertificate();
+        if (registrationCertificate == null
+                || !WARNED_OVER_ASKING.add(getConfig().getAlias() + "|" + registrationCertificate.hashCode() + "|"
+                        + dcqlQuery.hashCode())) {
+            return;
+        }
+        try {
+            for (String finding :
+                    RegistrationCertificate.parse(registrationCertificate).overAsking(dcqlQuery)) {
+                LOG.warnf(
+                        "OID4VP IdP '%s': the request asks for %s, which the registration certificate does not register. "
+                                + "Wallets refuse such requests (over-asking).",
+                        getConfig().getAlias(), finding);
+            }
+        } catch (Exception e) {
+            LOG.debugf("Over-asking check skipped: %s", e.getMessage());
+        }
+    }
+
+    private PreparedDcqlQuery buildPreparedDcqlQuery() {
         String manual = getConfig().getDcqlQuery();
         if (StringUtil.isNotBlank(manual)) {
             DcqlQueryValidator.validate(manual);

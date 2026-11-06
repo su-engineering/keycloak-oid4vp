@@ -192,6 +192,44 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
     }
 
     @Test
+    void registrationCertificateTravelsInVerifierInfo() throws Exception {
+        String registrationCertificate = testRegistrationCertificate();
+        idpConfig
+                .set(Oid4vpIdentityProviderConfig.DCQL_QUERY, SD_JWT_QUERY)
+                .set(Oid4vpIdentityProviderConfig.REGISTRATION_CERTIFICATE, registrationCertificate)
+                .apply();
+
+        loginThroughDigitalCredentialsApi("dcapi-rc");
+
+        String requestObject = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(lastRequestBody.get())
+                .at("/digital/requests/0/data/request")
+                .asText();
+        var claims = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(Base64.getUrlDecoder().decode(requestObject.split("\\.")[1]));
+        var entry = claims.path("verifier_info").get(0);
+        assertThat(entry.path("format").asText()).isEqualTo("registration_cert");
+        assertThat(new String(Base64.getUrlDecoder().decode(entry.path("data").asText()), StandardCharsets.US_ASCII))
+                .isEqualTo(registrationCertificate);
+    }
+
+    /** A self-signed rc-wrp+jwt; this wallet runs without ARF checks, so only its transport is under test. */
+    private static String testRegistrationCertificate() throws Exception {
+        var keys = new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256).generate();
+        var jwt = new com.nimbusds.jwt.SignedJWT(
+                new com.nimbusds.jose.JWSHeader.Builder(com.nimbusds.jose.JWSAlgorithm.ES256)
+                        .type(new com.nimbusds.jose.JOSEObjectType("rc-wrp+jwt"))
+                        .build(),
+                new com.nimbusds.jwt.JWTClaimsSet.Builder()
+                        .subject("NTRDE-TEST")
+                        .claim("name", "Test RP")
+                        .expirationTime(new java.util.Date(System.currentTimeMillis() + 86_400_000L))
+                        .build());
+        jwt.sign(new com.nimbusds.jose.crypto.ECDSASigner(keys));
+        return jwt.serialize();
+    }
+
+    @Test
     void buttonStaysHiddenWithoutBrowserSupport() throws Exception {
         idpConfig.set(Oid4vpIdentityProviderConfig.DCQL_QUERY, SD_JWT_QUERY).apply();
         context.addInitScript("delete window.DigitalCredential;");

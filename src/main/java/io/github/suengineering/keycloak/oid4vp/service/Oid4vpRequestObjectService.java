@@ -97,7 +97,7 @@ public class Oid4vpRequestObjectService {
             SignedRequestObject signedRequest = provider.getRedirectFlowService()
                     .buildSignedRequestObject(new RequestObjectParams(
                             preparedDcqlQuery.dcqlQuery(),
-                            config.getVerifierInfo(),
+                            config.getRequestVerifierInfo(),
                             requestContext.effectiveClientId(),
                             config.getClientIdScheme(),
                             requestContext.responseUri(),

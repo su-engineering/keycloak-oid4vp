@@ -23,9 +23,14 @@ import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpResponseMode;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
 import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryValidator;
+import io.github.suengineering.keycloak.oid4vp.verification.RegistrationCertificate;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.RealmModel;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -62,6 +67,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String X509_SIGNING_KEY_JWK = "x509SigningKeyJwk";
 
     public static final String VERIFIER_INFO = "verifierInfo";
+    public static final String REGISTRATION_CERTIFICATE = "registrationCertificate";
 
     public static final String CREDENTIAL_SET_MODE = "credentialSetMode";
     public static final String CREDENTIAL_SET_MODE_OPTIONAL = "optional";
@@ -242,6 +248,43 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public String getVerifierInfo() {
         return getConfig().get(VERIFIER_INFO);
+    }
+
+    public String getRegistrationCertificate() {
+        String value = getConfig().get(REGISTRATION_CERTIFICATE);
+        return StringUtil.isBlank(value) ? null : value.trim();
+    }
+
+    /**
+     * The {@code verifier_info} sent with requests: the configured entries plus the registration
+     * certificate, unless the configured entries already carry one.
+     */
+    public String getRequestVerifierInfo() {
+        String configured = getVerifierInfo();
+        String registrationCertificate = getRegistrationCertificate();
+        if (registrationCertificate == null) {
+            return configured;
+        }
+        try {
+            List<Object> entries = new ArrayList<>();
+            if (StringUtil.isNotBlank(configured)) {
+                Object parsed = JsonSerialization.readValue(configured, Object.class);
+                if (!(parsed instanceof List<?> list)) {
+                    return configured;
+                }
+                for (Object entry : list) {
+                    if (entry instanceof Map<?, ?> map
+                            && RegistrationCertificate.VERIFIER_INFO_FORMAT.equals(map.get("format"))) {
+                        return configured;
+                    }
+                    entries.add(entry);
+                }
+            }
+            entries.add(RegistrationCertificate.parse(registrationCertificate).verifierInfoEntry());
+            return JsonSerialization.writeValueAsString(entries);
+        } catch (Exception e) {
+            return configured;
+        }
     }
 
     public void setVerifierInfo(String verifierInfo) {

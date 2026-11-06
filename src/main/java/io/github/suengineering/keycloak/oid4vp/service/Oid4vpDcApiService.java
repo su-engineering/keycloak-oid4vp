@@ -157,7 +157,7 @@ public class Oid4vpDcApiService {
                 .buildDcApiRequest(
                         new RequestObjectParams(
                                 dcql.dcqlQuery(),
-                                config.getVerifierInfo(),
+                                config.getRequestVerifierInfo(),
                                 flow.effectiveClientId(),
                                 config.getClientIdScheme(),
                                 null,
