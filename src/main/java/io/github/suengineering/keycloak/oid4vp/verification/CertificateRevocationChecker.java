@@ -97,6 +97,9 @@ public class CertificateRevocationChecker {
     private static final Duration MAX_CACHE = Duration.ofHours(24);
     private static final Duration UNDATED_OCSP_CACHE = Duration.ofMinutes(5);
     private static final Duration MAX_UNDATED_AGE = Duration.ofDays(7);
+    /** Without nextUpdate an OCSP answer carries no validity period; it is trusted only briefly. */
+    private static final Duration MAX_UNDATED_OCSP_AGE = Duration.ofHours(1);
+
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
     private static final Map<String, CachedCrl> CRL_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, CachedStatus> OCSP_CACHE = new ConcurrentHashMap<>();
@@ -193,6 +196,15 @@ public class CertificateRevocationChecker {
     }
 
     private void verifyCrl(X509CRL crl, X509Certificate issuer, Instant now) throws Exception {
+        // Delta CRLs and partitioned CRLs (issuing distribution point) list only part of the
+        // revocations; treating them as complete would report revoked certificates as good.
+        if (crl.getExtensionValue("2.5.29.27") != null || crl.getExtensionValue("2.5.29.28") != null) {
+            throw new IllegalStateException("Delta or partitioned CRLs are not supported");
+        }
+        if (crl.getCriticalExtensionOIDs() != null
+                && !crl.getCriticalExtensionOIDs().isEmpty()) {
+            throw new IllegalStateException("CRL has unsupported critical extensions");
+        }
         if (!crl.getIssuerX500Principal().equals(issuer.getSubjectX500Principal())) {
             throw new IllegalStateException("CRL issued by " + crl.getIssuerX500Principal());
         }
@@ -303,7 +315,7 @@ public class CertificateRevocationChecker {
                 throw new IllegalStateException("OCSP response from the future");
             if (nextUpdate != null
                     ? now.isAfter(nextUpdate.plus(CLOCK_SKEW))
-                    : thisUpdate.plus(MAX_UNDATED_AGE).isBefore(now)) {
+                    : thisUpdate.plus(MAX_UNDATED_OCSP_AGE).isBefore(now)) {
                 throw new IllegalStateException("OCSP response is outdated");
             }
             Status status =

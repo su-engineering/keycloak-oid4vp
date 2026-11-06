@@ -302,4 +302,36 @@ class VicalProviderTest {
             return this;
         }
     }
+
+    @Test
+    void aListCachedForOneSignerIsNotServedToAnotherPin() throws Exception {
+        String url = "https://vical.example/shared-" + System.nanoTime();
+        byte[] vical = signedVical(vicalSignerKeys, vicalSigner, null, entry(us.iaca, MDL));
+        VicalProvider trusting = new VicalProvider(null, url, List.of(vicalSigner), Duration.ZERO) {
+            @Override
+            byte[] fetch() {
+                return vical;
+            }
+        };
+        assertThat(trusting.anchorsFor(MDL)).containsExactly(us.iaca);
+
+        KeyPair otherKeys = MdocTrustTestPki.p256();
+        X509Certificate otherPin = MdocTrustTestPki.certificate(
+                "CN=Other VICAL Signer",
+                otherKeys,
+                "CN=Other VICAL Signer",
+                otherKeys,
+                false,
+                KeyUsage.digitalSignature,
+                false,
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(30, ChronoUnit.DAYS));
+        VicalProvider otherPinned = new VicalProvider(null, url, List.of(otherPin), Duration.ZERO) {
+            @Override
+            byte[] fetch() {
+                return vical;
+            }
+        };
+        assertThatThrownBy(() -> otherPinned.anchorsFor(MDL)).hasMessageContaining("could not be loaded");
+    }
 }

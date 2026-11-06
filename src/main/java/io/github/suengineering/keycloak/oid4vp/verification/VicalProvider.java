@@ -59,6 +59,7 @@ public class VicalProvider {
     static final int MAX_VICAL_BYTES = 8 * 1024 * 1024;
     private static final Duration DEFAULT_CACHE_TTL = Duration.ofHours(24);
     private static final Map<String, CachedVical> CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_CACHED_VICALS = 32;
 
     private final KeycloakSession session;
     private final String url;
@@ -103,8 +104,9 @@ public class VicalProvider {
 
     private Vical current() {
         Instant now = clock.instant();
-        CachedVical cached = CACHE.get(url);
-        if (cached != null && now.isBefore(cached.expiresAt())) {
+        String cacheKey = cacheKey();
+        CachedVical cached = CACHE.get(cacheKey);
+        if (cached != null && now.isBefore(cached.expiresAt()) && notExpired(cached.vical(), now)) {
             return cached.vical();
         }
         try {
@@ -113,18 +115,41 @@ public class VicalProvider {
             if (vical.nextUpdate() != null && vical.nextUpdate().isBefore(expires)) {
                 expires = vical.nextUpdate().isAfter(now) ? vical.nextUpdate() : now;
             }
-            CACHE.put(url, new CachedVical(vical, now, expires));
+            if (vical.notAfter() != null && vical.notAfter().isBefore(expires)) {
+                expires = vical.notAfter();
+            }
+            if (CACHE.size() >= MAX_CACHED_VICALS) CACHE.clear();
+            CACHE.put(cacheKey, new CachedVical(vical, now, expires));
             return vical;
         } catch (Exception e) {
             if (cached != null
                     && now.isBefore(cached.fetchedAt().plus(maxStaleAge))
-                    && (cached.vical().notAfter() == null
-                            || now.isBefore(cached.vical().notAfter()))) {
+                    && notExpired(cached.vical(), now)) {
                 LOG.warnf("VICAL refresh from %s failed, using the cached list: %s", url, e.getMessage());
                 return cached.vical();
             }
             throw new IllegalStateException("VICAL could not be loaded from " + url + ": " + e.getMessage(), e);
         }
+    }
+
+    private static boolean notExpired(Vical vical, Instant now) {
+        return vical.notAfter() == null || now.isBefore(vical.notAfter());
+    }
+
+    /** Lists verified against other signing certificates are never reused. */
+    private String cacheKey() {
+        StringBuilder key = new StringBuilder(url);
+        for (X509Certificate certificate : signingCertificates) {
+            try {
+                key.append('|')
+                        .append(java.util.HexFormat.of()
+                                .formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                                        .digest(certificate.getEncoded())));
+            } catch (Exception e) {
+                throw new IllegalStateException("Cannot fingerprint VICAL signing certificate", e);
+            }
+        }
+        return key.toString();
     }
 
     byte[] fetch() throws Exception {
@@ -173,7 +198,7 @@ public class VicalProvider {
         if (!(new CBORDecoder(payload.getValue()).next() instanceof CBORPairList vical)) {
             throw new IllegalStateException("VICAL payload is not a map");
         }
-        Instant notAfter = instant(field(vical, "notAfter"));
+        Instant notAfter = date(vical, "notAfter");
         if (notAfter != null && !now.isBefore(notAfter)) {
             throw new IllegalStateException("VICAL expired at " + notAfter);
         }
@@ -196,7 +221,7 @@ public class VicalProvider {
             }
             entries.add(new Entry(certificate, List.copyOf(docTypes)));
         }
-        return new Vical(List.copyOf(entries), instant(field(vical, "nextUpdate")), notAfter);
+        return new Vical(List.copyOf(entries), date(vical, "nextUpdate"), notAfter);
     }
 
     private static CBORItem field(CBORPairList map, String key) {
@@ -206,16 +231,19 @@ public class VicalProvider {
         return null;
     }
 
-    private static Instant instant(CBORItem item) {
+    /** A tdate (tag 0) or epoch (tag 1) date; present but unreadable fails closed. */
+    private static Instant date(CBORPairList map, String key) {
+        CBORItem item = field(map, key);
+        if (item == null) return null;
         if (item instanceof CBORTaggedItem tagged) item = tagged.getTagContent();
-        if (item instanceof CBORString text) {
-            try {
-                return Instant.parse(text.getValue());
-            } catch (Exception e) {
-                return null;
-            }
+        try {
+            if (item instanceof CBORString text) return Instant.parse(text.getValue());
+            if (item instanceof com.authlete.cbor.CBORInteger number) return Instant.ofEpochSecond(number.getValue());
+            if (item instanceof com.authlete.cbor.CBORLong number) return Instant.ofEpochSecond(number.getValue());
+        } catch (Exception e) {
+            // fall through
         }
-        return null;
+        throw new IllegalStateException("VICAL " + key + " is not a readable date");
     }
 
     /** Clears cached VICALs; for tests. */
