@@ -162,6 +162,15 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .defaultValue("false")
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.DC_API_ORIGIN)
+                .label("Digital Credentials API Origin")
+                .helpText(
+                        "The origin that serves the login page, for example https://login.example.com. Wallet "
+                                + "presentations are bound to it. Defaults to the realm's Frontend URL; without either, the "
+                                + "Digital Credentials API is not offered, because the origin must not come from request headers.")
+                .type(ProviderConfigProperty.STRING_TYPE)
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.DC_API_ISO_MDOC_ENABLED)
                 .label("Offer ISO mdoc over the Digital Credentials API")
                 .helpText("Also offer ISO/IEC 18013-7 Annex C (org-iso-mdoc), the protocol of Safari and Apple Wallet, "

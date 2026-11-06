@@ -383,9 +383,38 @@ public class Oid4vpDcApiService {
         return current;
     }
 
-    /** The origin of the Keycloak front end, which serves the login page that calls the browser API. */
+    /**
+     * The origin presentations are bound to. It comes from configuration, never from the request:
+     * the base URI follows the Host and X-Forwarded-Host headers when Keycloak's hostname is not
+     * pinned, and an attacker could then obtain requests bound to their own site.
+     */
     String keycloakOrigin() {
-        return originOf(session.getContext().getUri().getBaseUri());
+        String origin =
+                configuredOrigin(provider.getConfig(), session.getContext().getRealm());
+        if (origin == null) {
+            throw new FlowMismatchException(
+                    "invalid_request", "The Digital Credentials API needs a configured origin (dcApiOrigin)");
+        }
+        return origin;
+    }
+
+    /** {@code dcApiOrigin}, else the realm's Frontend URL; {@code null} when neither is set or valid. */
+    public static String configuredOrigin(Oid4vpIdentityProviderConfig config, org.keycloak.models.RealmModel realm) {
+        String configured = config.getDcApiOrigin();
+        if (StringUtil.isBlank(configured) && realm != null) {
+            configured = realm.getAttribute("frontendUrl");
+        }
+        if (StringUtil.isBlank(configured)) return null;
+        try {
+            URI uri = URI.create(configured.trim());
+            if (uri.getHost() == null
+                    || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))) {
+                return null;
+            }
+            return originOf(uri);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     static String originOf(URI uri) {

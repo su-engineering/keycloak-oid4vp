@@ -60,6 +60,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String CROSS_DEVICE_ENABLED = "crossDeviceEnabled";
     public static final String DC_API_ENABLED = "dcApiEnabled";
     public static final String DC_API_ISO_MDOC_ENABLED = "dcApiIsoMdocEnabled";
+    public static final String DC_API_ORIGIN = "dcApiOrigin";
     public static final String WALLET_SCHEME = "walletScheme";
 
     public static final String CLIENT_ID_SCHEME = "clientIdScheme";
@@ -195,6 +196,11 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public void setDcApiEnabled(boolean enabled) {
         getConfig().put(DC_API_ENABLED, String.valueOf(enabled));
+    }
+
+    public String getDcApiOrigin() {
+        String value = getConfig().get(DC_API_ORIGIN);
+        return StringUtil.isBlank(value) ? null : value.trim();
     }
 
     public boolean isDcApiIsoMdocEnabled() {
