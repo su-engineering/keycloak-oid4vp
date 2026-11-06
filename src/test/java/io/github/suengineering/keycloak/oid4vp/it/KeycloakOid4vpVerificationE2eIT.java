@@ -81,7 +81,7 @@ class KeycloakOid4vpVerificationE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getSameDeviceWalletUrl();
         var walletResponse = flow.submitToWallet(walletUrl);
 
-        assertLoginFailed(walletResponse, "trust list", "signature", "failed", "authentication");
+        assertLoginFailed(walletResponse, "wallet sign-in failed");
     }
 
     @Test
@@ -100,7 +100,8 @@ class KeycloakOid4vpVerificationE2eIT extends AbstractOid4vpE2eTest {
         String walletUrl = flow.getSameDeviceWalletUrl();
         var walletResponse = flow.submitToWallet(walletUrl);
 
-        assertLoginFailed(walletResponse, "trust list", "lote", "mismatch", "authentication");
+        // The page shows a fixed message; the LoTE mismatch is recorded in the event log.
+        assertLoginFailed(walletResponse, "wallet sign-in failed");
     }
 
     @Test
