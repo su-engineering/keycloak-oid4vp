@@ -52,6 +52,21 @@ import org.keycloak.util.KeyWrapperUtil;
  */
 public class SdJwtVerifier {
 
+    /** The {@code iss} of the issuer-signed JWT, read without verification; {@code null} when unreadable. */
+    public static String unverifiedIssuer(String sdJwt) {
+        try {
+            String jwt = sdJwt.substring(0, sdJwt.indexOf('~') >= 0 ? sdJwt.indexOf('~') : sdJwt.length());
+            String[] parts = jwt.split("\\.");
+            if (parts.length < 2) return null;
+            JsonNode payload = org.keycloak.util.JsonSerialization.mapper.readTree(
+                    java.util.Base64.getUrlDecoder().decode(parts[1]));
+            JsonNode iss = payload.get("iss");
+            return iss != null && iss.isTextual() ? iss.textValue() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private CertificateRevocationChecker revocationChecker = CertificateRevocationChecker.DISABLED;
 
     /** Checks issuer certificate chains for revocation (CRL/OCSP) with {@code checker}. */

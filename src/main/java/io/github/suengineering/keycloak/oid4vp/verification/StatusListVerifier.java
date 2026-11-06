@@ -46,6 +46,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.jboss.logging.Logger;
+import org.keycloak.broker.provider.IdentityBrokerException;
 import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.jose.jws.JWSInput;
@@ -69,6 +70,8 @@ public class StatusListVerifier {
 
     private static final String TRUST_ANCHOR_DOMAIN = "trust-anchors";
     private static final ConcurrentHashMap<String, CachedStatusList> CACHE = new ConcurrentHashMap<>();
+    static final int MAX_CACHED_LISTS = 256;
+    static final long MAX_CACHED_BYTES = 128L * 1024 * 1024;
 
     /**
      * How the signature of a Status List Token may be trusted for one referenced credential.
@@ -165,16 +168,17 @@ public class StatusListVerifier {
         if (!(statusObj instanceof Map<?, ?> statusMap)) return null;
 
         Object statusListObj = statusMap.get("status_list");
-        if (!(statusListObj instanceof Map<?, ?> statusListMap)) return null;
-
-        Object uriObj = statusListMap.get("uri");
-        Object idxObj = statusListMap.get("idx");
-        if (uriObj == null || idxObj == null) return null;
-
-        String uri = stringValue(uriObj);
-        Integer idx = integerValue(idxObj);
-        if (uri == null || idx == null) return null;
-        return new StatusReference(uri, idx);
+        if (statusListObj == null) return null; // another status mechanism, not checked here
+        // A status_list reference that cannot be read must not pass as "not revoked".
+        if (!(statusListObj instanceof Map<?, ?> statusListMap)) {
+            throw new IdentityBrokerException("Malformed status_list reference");
+        }
+        String uri = stringValue(statusListMap.get("uri"));
+        Long idx = longValue(statusListMap.get("idx"));
+        if (uri == null || uri.isBlank() || idx == null || idx < 0 || idx > Integer.MAX_VALUE) {
+            throw new IdentityBrokerException("Malformed status_list reference");
+        }
+        return new StatusReference(uri, idx.intValue());
     }
 
     private Object findNestedStatusClaim(Map<String, Object> claims) {
@@ -209,7 +213,28 @@ public class StatusListVerifier {
 
         var decoded = new DecodedStatusList(statusBits, parsed.bitsPerStatus());
         CACHE.put(uri, new CachedStatusList(decoded, expiresAt, parsed.trustDomain()));
+        evictBeyondBudget();
         return decoded;
+    }
+
+    /**
+     * Status list URIs come from presented credentials, so the cache is bounded: expired entries go
+     * first, then those expiring soonest, until the decompressed lists fit the budget.
+     */
+    private static synchronized void evictBeyondBudget() {
+        CACHE.entrySet().removeIf(entry -> !entry.getValue().isValid());
+        while (CACHE.size() > MAX_CACHED_LISTS || cachedBytes() > MAX_CACHED_BYTES) {
+            var soonest = CACHE.entrySet().stream().min(java.util.Comparator.comparing(entry -> entry.getValue()
+                    .expiresAt()));
+            if (soonest.isEmpty()) return;
+            CACHE.remove(soonest.get().getKey());
+        }
+    }
+
+    private static long cachedBytes() {
+        long total = 0;
+        for (CachedStatusList entry : CACHE.values()) total += entry.decoded().statusBits().length;
+        return total;
     }
 
     /** A verified Status List Token, before decompression. */
@@ -532,6 +557,8 @@ public class StatusListVerifier {
         if (session == null) {
             throw new IllegalStateException("No KeycloakSession available for HTTP requests");
         }
+        // The status list URI comes from the presented credential.
+        io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.check(session, uri);
         HttpGet get = new HttpGet(uri);
         get.setHeader("Accept", "application/statuslist+jwt, " + STATUS_LIST_CWT_TYPE);
         try (CloseableHttpResponse response =
@@ -594,17 +621,20 @@ public class StatusListVerifier {
             throw new IllegalStateException("Empty status list");
         }
         validateBitsPerStatus(bitsPerStatus);
-        int bitOffset = idx * bitsPerStatus;
-        int byteIndex = bitOffset / 8;
-        int bitIndex = bitOffset % 8;
+        if (idx < 0) {
+            throw new IllegalStateException("Status index " + idx + " is negative");
+        }
+        long bitOffset = (long) idx * bitsPerStatus;
+        long byteOffset = bitOffset / 8;
+        int bitIndex = (int) (bitOffset % 8);
 
-        if (byteIndex >= statusBits.length) {
+        if (byteOffset >= statusBits.length) {
             throw new IllegalStateException("Status index " + idx + " out of range (list has "
                     + (statusBits.length * 8 / bitsPerStatus) + " entries)");
         }
 
         int mask = ((1 << bitsPerStatus) - 1);
-        int byteValue = Byte.toUnsignedInt(statusBits[byteIndex]);
+        int byteValue = Byte.toUnsignedInt(statusBits[(int) byteOffset]);
         return (byteValue >>> bitIndex) & mask;
     }
 

@@ -89,6 +89,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
 
     public Oid4vpIdentityProvider(KeycloakSession session, Oid4vpIdentityProviderConfig config) {
         super(session, config);
+        io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.allowPrivateNetworks(
+                session, config.isAllowPrivateNetworkFetch());
         this.redirectFlowService = new Oid4vpRedirectFlowService(session, config.getRequestObjectLifespanSeconds());
         this.qrCodeService = new Oid4vpQrCodeService();
 
@@ -108,27 +110,28 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                 config,
                 this,
                 new VpTokenProcessor(
-                        OBJECT_MAPPER,
-                        new VpTokenProcessor.Config(
-                                session,
-                                config.getTrustListUrl(),
-                                config.getStatusListMaxCacheTtl(),
-                                config.getTrustListMaxCacheTtl(),
-                                config.getIssuerMetadataMaxCacheTtl(),
-                                config.isEnforceHaip(),
-                                config.getClockSkewSeconds(),
-                                config.getKbJwtMaxAgeSeconds(),
-                                trustListSigningCerts,
-                                config.getTrustListMaxStaleAge(),
-                                config.getTrustListLoTEType(),
-                                didResolver,
-                                config.isTrustListAllowUnsigned(),
-                                config.getTrustListServiceTypes(),
-                                config.getTrustListTerritories(),
-                                config.getVicalUrl(),
-                                parseTrustListSigningCerts(config.getVicalSigningCertPem()),
-                                config.getMdocCertificateProfile(),
-                                config.getCertificateRevocationCheck())));
+                                OBJECT_MAPPER,
+                                new VpTokenProcessor.Config(
+                                        session,
+                                        config.getTrustListUrl(),
+                                        config.getStatusListMaxCacheTtl(),
+                                        config.getTrustListMaxCacheTtl(),
+                                        config.getIssuerMetadataMaxCacheTtl(),
+                                        config.isEnforceHaip(),
+                                        config.getClockSkewSeconds(),
+                                        config.getKbJwtMaxAgeSeconds(),
+                                        trustListSigningCerts,
+                                        config.getTrustListMaxStaleAge(),
+                                        config.getTrustListLoTEType(),
+                                        didResolver,
+                                        config.isTrustListAllowUnsigned(),
+                                        config.getTrustListServiceTypes(),
+                                        config.getTrustListTerritories(),
+                                        config.getVicalUrl(),
+                                        parseTrustListSigningCerts(config.getVicalSigningCertPem()),
+                                        config.getMdocCertificateProfile(),
+                                        config.getCertificateRevocationCheck()))
+                        .withIssuerFilter(config::isIssuerAllowed));
 
         RealmModel realm = session.getContext().getRealm();
         int loginTimeoutSeconds = realm != null ? realm.getAccessCodeLifespanLogin() : DEFAULT_LOGIN_TIMEOUT_SECONDS;

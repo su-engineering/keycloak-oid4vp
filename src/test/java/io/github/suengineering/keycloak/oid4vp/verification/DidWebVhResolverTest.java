@@ -303,6 +303,11 @@ class DidWebVhResolverTest {
     void httpUsesKeycloakClientWithBoundedResponsesAndNoRedirects() throws Exception {
         var log = new WebVhTestLog(new WebVhTestLog.TestSigner().publicKey());
         KeycloakSession session = mock(KeycloakSession.class);
+        // Hosts here are fictional and served by mocks; the address policy is tested separately.
+        org.mockito.Mockito.when(session.getAttribute(
+                        io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.ALLOW_PRIVATE_NETWORKS_ATTRIBUTE,
+                        Boolean.class))
+                .thenReturn(true);
         HttpClientProvider provider = mock(HttpClientProvider.class);
         CloseableHttpClient client = mock(CloseableHttpClient.class);
         CloseableHttpResponse response = mock(CloseableHttpResponse.class);

@@ -283,6 +283,17 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.ALLOW_PRIVATE_NETWORK_FETCH)
+                .label("Allow Private Network Fetches")
+                .helpText(
+                        "Status list, did:web and issuer metadata URLs come from the presented credential. By default "
+                                + "Keycloak refuses to fetch them from loopback, private and link-local addresses, so a crafted "
+                                + "credential cannot make it call internal services. Enable only when issuers run on an internal "
+                                + "network. Trust list and VICAL URLs you configure are not affected.")
+                .type(ProviderConfigProperty.BOOLEAN_TYPE)
+                .defaultValue("false")
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.VICAL_URL)
                 .label("VICAL URL")
                 .helpText("Optional URL of a VICAL (Verified Issuer Certificate Authority List, for example the AAMVA "
