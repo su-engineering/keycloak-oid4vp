@@ -76,6 +76,8 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public static final String TRUST_LIST_URL = "trustListUrl";
     public static final String TRUST_LIST_SIGNING_CERT_PEM = "trustListSigningCertPem";
+    public static final String TRUST_LIST_SERVICE_TYPES = "trustListServiceTypes";
+    public static final String TRUST_LIST_TERRITORIES = "trustListTerritories";
     public static final String VICAL_URL = "vicalUrl";
     public static final String VICAL_SIGNING_CERT_PEM = "vicalSigningCertPem";
     public static final String MDOC_CERTIFICATE_PROFILE = "mdocCertificateProfile";
@@ -322,6 +324,25 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public String getTrustListSigningCertPem() {
         return normalizePemConfigValue(getConfig().get(TRUST_LIST_SIGNING_CERT_PEM));
+    }
+
+    /** ETSI TS 119 612 service types whose granted services anchor issuer chains (XML trusted lists). */
+    public java.util.Set<String> getTrustListServiceTypes() {
+        return splitConfigList(getConfig().get(TRUST_LIST_SERVICE_TYPES), false);
+    }
+
+    /** Territories to follow from a list of trusted lists; empty follows all. */
+    public java.util.Set<String> getTrustListTerritories() {
+        return splitConfigList(getConfig().get(TRUST_LIST_TERRITORIES), true);
+    }
+
+    private static java.util.Set<String> splitConfigList(String value, boolean upperCase) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        if (StringUtil.isBlank(value)) return out;
+        for (String part : value.split("[,\\s]+")) {
+            if (!part.isBlank()) out.add(upperCase ? part.trim().toUpperCase(java.util.Locale.ROOT) : part.trim());
+        }
+        return out;
     }
 
     public String getVicalUrl() {

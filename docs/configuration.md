@@ -126,7 +126,9 @@ Keycloak does not check the registrar's trust chain or revocation status of eith
 | Key | Description | Default |
 |-----|-------------|---------|
 | `enforceHaip` | Enables the HAIP-oriented effective configuration (`direct_post.jwt` and `x509_hash`). | `true` |
-| `trustListUrl` | URL of an ETSI TS 119 602 trust list JWT. | *(none)* |
+| `trustListUrl` | URL of an ETSI TS 119 602 trust list JWT, or of an ETSI TS 119 612 XML trusted list or the EU list of trusted lists (see [XML trusted lists](#xml-trusted-lists-etsi-ts-119-612)). | *(none)* |
+| `trustListServiceTypes` | XML trusted lists only: service type URIs whose granted services anchor issuer chains. | *(none)* |
+| `trustListTerritories` | EU list of trusted lists only: country codes of the national lists to load. Empty loads all. | *(none)* |
 | `trustListLoTEType` | Expected trust-list LoTE type for this IdP. Keep one trust domain per OID4VP IdP instance. Leave empty only to accept all LoTE types from the configured trust list. | empty |
 | `trustedAuthoritiesMode` | DCQL `trusted_authorities` mode: `none`, `etsi_tl`, or `aki`. | `none` |
 | `trustListSigningCertPem` | PEM-encoded certificate chain used to verify the trust list JWT signature. Required when `trustListUrl` is set; an unsigned trust list is rejected. | *(none)* |
@@ -153,6 +155,16 @@ Every returned credential is matched to its own ID in the DCQL query saved for t
 
 Use one OID4VP IdP instance per trust domain. If `trustListLoTEType` is configured, it must match the fetched trust list's `ListAndSchemeInformation.LoTEType`. If it is left empty, all LoTE types from that trust list are accepted and the provider logs a warning.
 Within the accepted trust list, credential signature verification uses only `.../SvcType/.../Issuance` services.
+
+### XML trusted lists (ETSI TS 119 612)
+
+`trustListUrl` can also point to an ETSI TS 119 612 XML trusted list, or to the EU list of trusted lists (LOTL, `https://ec.europa.eu/tools/lotl/eu-lotl.xml`). Keycloak detects the format from the response.
+
+- The XML signature must be the single enveloped signature directly under the root, cover the whole document (`URI=""`), and verify with a certificate anchored in `trustListSigningCertPem`. Documents with a DOCTYPE are rejected.
+- For a LOTL, `trustListSigningCertPem` pins the LOTL itself (the European Commission publishes its signing certificates in the Official Journal). Each national list it points to must be signed by one of the certificates the LOTL lists for it. `trustListTerritories` limits which national lists are loaded; a national list that cannot be fetched or verified is skipped and logged, the others still apply.
+- Only services whose current status is granted (or recognised at national level) and whose type is in `trustListServiceTypes` become trust anchors. No type is accepted by default. Do not list broad types such as `http://uri.etsi.org/TrstSvc/Svctype/CA/QC`: every qualified certificate holder chains to those CAs and could then sign credentials. Use the type your credential issuers are registered under, for example `http://uri.etsi.org/TrstSvc/Svctype/EAA/Q` for qualified electronic attestation of attributes.
+- The cache follows the earliest `NextUpdate` across the loaded lists, capped by `trustListMaxCacheTtl`. Service history is not evaluated: only the current status counts.
+- `trustListLoTEType`, if set, is compared with the list's `TSLType`.
 
 ### mDoc issuer trust
 
