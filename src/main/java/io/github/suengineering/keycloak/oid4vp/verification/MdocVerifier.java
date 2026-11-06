@@ -242,15 +242,19 @@ public class MdocVerifier {
     private Map<String, Object> extractClaims(CBORPairList document, CBORPairList mso) {
         Map<String, Object> claims = new LinkedHashMap<>();
 
-        CBORPairList nameSpaces = map(map(document, "issuerSigned"), "nameSpaces");
-        if (nameSpaces == null) nameSpaces = map(document, "nameSpaces");
-        if (nameSpaces == null) return claims;
+        // Claims come only from issuerSigned.nameSpaces, the elements verifyDigests checks against the MSO.
+        CBORItem issuerSignedNameSpaces = val(map(document, "issuerSigned"), "nameSpaces");
+        if (issuerSignedNameSpaces == null) return claims;
+        if (!(issuerSignedNameSpaces instanceof CBORPairList nameSpaces)) {
+            throw new IllegalStateException("issuerSigned.nameSpaces is not a map");
+        }
 
         for (var nsPair : nameSpaces.getPairs()) {
             String namespace = stringValue(nsPair.getKey());
-            if (namespace != null && nsPair.getValue() instanceof CBORItemList elementsList) {
-                addNamespaceClaims(claims, namespace, elementsList);
+            if (namespace == null || !(nsPair.getValue() instanceof CBORItemList elementsList)) {
+                throw new IllegalStateException("Malformed issuer-signed namespace");
             }
+            addNamespaceClaims(claims, namespace, elementsList);
         }
 
         if (mso != null) {
@@ -262,13 +266,17 @@ public class MdocVerifier {
 
     private void addNamespaceClaims(Map<String, Object> claims, String namespace, CBORItemList elementsList) {
         for (CBORItem element : elementsList.getItems()) {
-            CBORPairList item = unwrapTag24(element);
-            if (item != null) {
-                String elementId = str(item, "elementIdentifier");
-                if (elementId != null) {
-                    claims.put(namespace + "/" + elementId, cborToJava(val(item, "elementValue")));
-                }
+            // ISO 18013-5 IssuerSignedItemBytes are tag 24; only that form is digest-checked as sent.
+            if (!(element instanceof CBORTaggedItem tagged)
+                    || tagged.getTagNumber().intValue() != 24) {
+                throw new IllegalStateException("Issuer-signed item is not tag-24 encoded");
             }
+            CBORPairList item = unwrapTag24(element);
+            String elementId = item != null ? str(item, "elementIdentifier") : null;
+            if (elementId == null) {
+                throw new IllegalStateException("Issuer-signed item has no elementIdentifier");
+            }
+            claims.put(namespace + "/" + elementId, cborToJava(val(item, "elementValue")));
         }
     }
 
@@ -422,8 +430,12 @@ public class MdocVerifier {
     }
 
     private void verifyDigests(CBORPairList mso, CBORPairList document) {
-        CBORPairList nameSpaces = map(map(document, "issuerSigned"), "nameSpaces");
-        if (nameSpaces == null || nameSpaces.getPairs().isEmpty()) return;
+        CBORItem issuerSignedNameSpaces = val(map(document, "issuerSigned"), "nameSpaces");
+        if (issuerSignedNameSpaces == null) return;
+        if (!(issuerSignedNameSpaces instanceof CBORPairList nameSpaces)) {
+            throw new IllegalStateException("issuerSigned.nameSpaces is not a map");
+        }
+        if (nameSpaces.getPairs().isEmpty()) return;
         CBORPairList valueDigests = map(mso, "valueDigests");
         if (valueDigests == null) {
             throw new IllegalStateException("MSO has no valueDigests for disclosed namespaces");

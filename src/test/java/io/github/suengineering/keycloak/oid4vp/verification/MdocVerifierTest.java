@@ -538,6 +538,55 @@ class MdocVerifierTest {
         }
     }
 
+    @Test
+    void claimsOutsideIssuerSignedNameSpacesAreNeverUsed() throws Exception {
+        // A holder removes issuerSigned.nameSpaces and adds an unsigned top-level map with chosen values.
+        MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+        CBORItemList transcript = MdocSessionTranscriptBuilder.buildOid4vp(CLIENT_ID, NONCE, RESPONSE_URI, null);
+        var root = (CBORPairList) new com.authlete.cbor.CBORDecoder(
+                        java.util.Base64.getUrlDecoder().decode(helper.build(transcript)))
+                .next();
+        CBORPairList document = (CBORPairList) ((CBORItemList) root.getPairs().stream()
+                        .filter(p -> p.getKey().toString().contains("documents"))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue())
+                .getItems()
+                .get(0);
+        var forgedItem = new CBORPairList(List.of(
+                new CBORPair(new CBORString("digestID"), new com.authlete.cbor.CBORInteger(99)),
+                new CBORPair(new CBORString("random"), new com.authlete.cbor.CBORByteArray(new byte[16])),
+                new CBORPair(new CBORString("elementIdentifier"), new CBORString("given_name")),
+                new CBORPair(new CBORString("elementValue"), new CBORString("Mallory"))));
+        var forgedNameSpaces = new CBORPairList(List.of(new CBORPair(
+                new CBORString("org.iso.18013.5.1"),
+                new CBORItemList(new com.authlete.cbor.CBORTaggedItem(
+                        24, new com.authlete.cbor.CBORByteArray(forgedItem.encode()))))));
+        var pairs = new java.util.ArrayList<CBORPair>();
+        for (CBORPair pair : document.getPairs()) {
+            if (pair.getKey().toString().contains("issuerSigned")) {
+                var issuerSigned = new java.util.ArrayList<CBORPair>();
+                for (CBORPair inner : ((CBORPairList) pair.getValue()).getPairs()) {
+                    if (!inner.getKey().toString().contains("nameSpaces")) issuerSigned.add(inner);
+                }
+                pairs.add(new CBORPair(pair.getKey(), new CBORPairList(issuerSigned)));
+            } else {
+                pairs.add(pair);
+            }
+        }
+        pairs.add(new CBORPair(new CBORString("nameSpaces"), forgedNameSpaces));
+        var forgedRoot = new CBORPairList(List.of(
+                new CBORPair(new CBORString("version"), new CBORString("1.0")),
+                new CBORPair(new CBORString("documents"), new CBORItemList(new CBORPairList(pairs))),
+                new CBORPair(new CBORString("status"), new com.authlete.cbor.CBORInteger(0))));
+        String token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(forgedRoot.encode());
+
+        MdocVerificationResult result = verifier.verifyWithTrustedCerts(
+                token, List.of(helper.issuerCert), CLIENT_ID, NONCE, RESPONSE_URI, null, null);
+
+        assertThat(result.claims()).doesNotContainKey("org.iso.18013.5.1/given_name");
+    }
+
     @Nested
     class DcApiDeviceAuth {
 
