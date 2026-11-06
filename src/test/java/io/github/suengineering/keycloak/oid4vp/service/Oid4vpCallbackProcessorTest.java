@@ -115,6 +115,30 @@ class Oid4vpCallbackProcessorTest {
     }
 
     @Test
+    void process_issuerScopedIdentity_usesTheScopedKeyAndRemembersTheLegacyOne() throws Exception {
+        when(config.isIssuerScopedIdentity()).thenReturn(true);
+        VerifiedCredential credential = new VerifiedCredential(
+                "cred-1",
+                "https://issuer.example",
+                "IdentityCredential",
+                Map.of("sub", "user1"),
+                PresentationType.SD_JWT,
+                "sd-jwt|https://issuer.example");
+        when(vpTokenProcessor.process(request(
+                        "vp-token",
+                        DEFAULT_REQUEST_CONTEXT.effectiveClientId(),
+                        DEFAULT_REQUEST_CONTEXT.nonce(),
+                        DEFAULT_REQUEST_CONTEXT.responseUri())))
+                .thenReturn(new VpTokenResult(Map.of("cred-1", List.of(credential))));
+
+        BrokeredIdentityContext result = processor.process(DEFAULT_REQUEST_CONTEXT, "vp-token", null, null);
+
+        assertThat(result.getId()).isEqualTo(credential.generateIssuerScopedIdentityKey("user1", true));
+        assertThat(result.getContextData().get(Oid4vpCallbackProcessor.LEGACY_IDENTITY_KEY))
+                .isEqualTo(credential.generateCaseInsensitiveIdentityKey("user1"));
+    }
+
+    @Test
     void process_missingRequestContext_throws() {
         assertThatThrownBy(() -> processor.process(null, "token", null, null))
                 .isInstanceOf(IdentityBrokerException.class)

@@ -340,4 +340,42 @@ class Oid4vpDirectPostServiceTest {
         context.setIdp(idp);
         return context;
     }
+
+    @Test
+    void movesAnAccountLinkedUnderTheLegacyKeyToTheIssuerScopedKey() {
+        KeycloakSession keycloakSession = mock(KeycloakSession.class);
+        RealmModel realmModel = mock(RealmModel.class);
+        org.keycloak.models.UserProvider users = mock(org.keycloak.models.UserProvider.class);
+        org.keycloak.models.UserModel user = mock(org.keycloak.models.UserModel.class);
+        when(keycloakSession.users()).thenReturn(users);
+        when(users.getUserByFederatedIdentity(
+                        eq(realmModel),
+                        org.mockito.ArgumentMatchers.argThat(
+                                identity -> identity != null && "legacy".equals(identity.getUserId()))))
+                .thenReturn(user);
+
+        assertThat(Oid4vpDirectPostService.moveLegacyLink(
+                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy"))
+                .isTrue();
+        verify(users).removeFederatedIdentity(realmModel, user, "oid4vp");
+        verify(users)
+                .addFederatedIdentity(
+                        eq(realmModel), eq(user), org.mockito.ArgumentMatchers.argThat(identity -> "scoped"
+                                .equals(identity.getUserId())));
+    }
+
+    @Test
+    void leavesLinksAloneWhenTheScopedKeyIsAlreadyLinked() {
+        KeycloakSession keycloakSession = mock(KeycloakSession.class);
+        RealmModel realmModel = mock(RealmModel.class);
+        org.keycloak.models.UserProvider users = mock(org.keycloak.models.UserProvider.class);
+        when(keycloakSession.users()).thenReturn(users);
+        when(users.getUserByFederatedIdentity(eq(realmModel), any()))
+                .thenReturn(mock(org.keycloak.models.UserModel.class));
+
+        assertThat(Oid4vpDirectPostService.moveLegacyLink(
+                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy"))
+                .isFalse();
+        verify(users, org.mockito.Mockito.never()).removeFederatedIdentity(any(), any(), anyString());
+    }
 }

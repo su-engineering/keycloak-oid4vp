@@ -137,6 +137,20 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.IDENTITY_KEY_SCOPE)
+                .label("Identity Key Scope")
+                .helpText(
+                        "subject: users are matched by the identifier claim alone, so the same value from any trusted "
+                                + "issuer reaches the same account. issuer: the key also covers the credential's issuer (SD-JWT "
+                                + "iss, or for mDoc the docType and the issuing authority), so equal identifiers from different "
+                                + "issuers stay apart. Use issuer when the trust list or VICAL holds issuers whose identifiers can "
+                                + "collide, such as document numbers from several authorities. Switching to issuer moves each "
+                                + "existing account link to the new key on that user's next login.")
+                .type(ProviderConfigProperty.LIST_TYPE)
+                .options(List.of("subject", "issuer"))
+                .defaultValue("subject")
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.SAME_DEVICE_ENABLED)
                 .label("Enable Same-Device Flow")
                 .helpText("Enable same-device flow (redirect to wallet app on same device).")

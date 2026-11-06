@@ -206,7 +206,7 @@ public class MdocVerifier {
                         "mDoc presentation requires device authentication and complete session context");
             }
             Map<String, Object> claims = extractClaims(document, mso);
-            verifyIssuerSignature(document, mso, trustedCertificates);
+            String issuingAuthority = verifyIssuerSignature(document, mso, trustedCertificates);
 
             validateValidity(mso);
             verifyDigests(mso, document);
@@ -214,7 +214,7 @@ public class MdocVerifier {
                 verifyDeviceAuth(document, mso, docType, transcripts);
             }
 
-            return new MdocVerificationResult(claims, docType, msoStatus(mso));
+            return new MdocVerificationResult(claims, docType, msoStatus(mso), issuingAuthority);
         } catch (Exception e) {
             throw wrapIfNeeded(e, "mDoc verification failed: ");
         }
@@ -314,7 +314,8 @@ public class MdocVerifier {
         return asMap(decoded);
     }
 
-    private void verifyIssuerSignature(
+    /** Verifies issuerAuth and returns the issuer name of the document signer certificate. */
+    private String verifyIssuerSignature(
             CBORPairList document, CBORPairList mso, List<X509Certificate> trustedCertificates) {
         if (trustedCertificates == null || trustedCertificates.isEmpty()) {
             throw new IllegalStateException("No trusted keys available for mDoc signature verification");
@@ -343,6 +344,7 @@ public class MdocVerifier {
             if (!new COSEVerifier(leafKey).verify(sign1)) {
                 throw new IllegalStateException("issuerAuth signature does not verify with the document signer key");
             }
+            return x5chain.get(0).getIssuerX500Principal().getName(javax.security.auth.x500.X500Principal.RFC2253);
         } catch (Exception e) {
             throw wrapIfNeeded(e, "Issuer signature verification failed: ");
         }

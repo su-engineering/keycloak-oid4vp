@@ -25,6 +25,14 @@ package io.github.suengineering.keycloak.oid4vp.domain;
  */
 public interface Oid4vpConfigProvider {
 
+    /**
+     * Whether the identity key from a credential claim also covers the credential's issuer
+     * ({@code identityKeyScope=issuer}), so equal identifiers from different issuers stay apart.
+     */
+    default boolean isIssuerScopedIdentity() {
+        return false;
+    }
+
     String getAlias();
 
     /**

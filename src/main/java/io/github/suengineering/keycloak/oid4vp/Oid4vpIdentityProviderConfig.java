@@ -62,6 +62,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String DC_API_ISO_MDOC_ENABLED = "dcApiIsoMdocEnabled";
     public static final String DC_API_ORIGIN = "dcApiOrigin";
     public static final String ALLOW_PRIVATE_NETWORK_FETCH = "allowPrivateNetworkFetch";
+    public static final String IDENTITY_KEY_SCOPE = "identityKeyScope";
     public static final String WALLET_SCHEME = "walletScheme";
 
     public static final String CLIENT_ID_SCHEME = "clientIdScheme";
@@ -197,6 +198,13 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public void setDcApiEnabled(boolean enabled) {
         getConfig().put(DC_API_ENABLED, String.valueOf(enabled));
+    }
+
+    @Override
+    public boolean isIssuerScopedIdentity() {
+        return "issuer"
+                .equalsIgnoreCase(
+                        String.valueOf(getConfig().get(IDENTITY_KEY_SCOPE)).trim());
     }
 
     /** Whether credential-driven fetches (status lists, did:web, issuer metadata) may reach private addresses. */

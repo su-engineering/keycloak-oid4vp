@@ -35,7 +35,41 @@ public record VerifiedCredential(
         String issuer,
         String credentialType,
         Map<String, Object> claims,
-        PresentationType presentationType) {
+        PresentationType presentationType,
+        String issuerScope) {
+
+    /** Without an issuer scope; scoped identity keys then fall back to the subject alone. */
+    public VerifiedCredential(
+            String credentialId,
+            String issuer,
+            String credentialType,
+            Map<String, Object> claims,
+            PresentationType presentationType) {
+        this(credentialId, issuer, credentialType, claims, presentationType, null);
+    }
+
+    /**
+     * An identity key that also covers who issued the credential ({@link #issuerScope()}), so equal
+     * subject values from different issuers map to different users.
+     */
+    public String generateIssuerScopedIdentityKey(String subject, boolean caseInsensitive) {
+        String normalizedSubject = normalize(subject);
+        if (caseInsensitive) {
+            normalizedSubject = normalizedSubject.toLowerCase(Locale.ROOT);
+        }
+        return sha256(normalize(issuerScope) + "\n" + normalizedSubject);
+    }
+
+    private static String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(JavaAlgorithm.SHA256);
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
 
     /**
      * Generates a stable identity key from the subject claim only.

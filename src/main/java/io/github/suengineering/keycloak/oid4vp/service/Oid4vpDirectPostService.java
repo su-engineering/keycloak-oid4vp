@@ -106,6 +106,10 @@ public class Oid4vpDirectPostService {
         String tabId = authSession.getTabId();
 
         context.setAuthenticationSession(authSession);
+        Object legacyKey = context.getContextData().get(Oid4vpCallbackProcessor.LEGACY_IDENTITY_KEY);
+        if (legacyKey instanceof String key) {
+            authSession.setAuthNote(legacyNote(requestHandle), key);
+        }
         SerializedBrokeredIdentityContext serialized = SerializedBrokeredIdentityContext.serialize(context);
         // One note per flow handle: a response posted to another handle of the same page cannot replace it.
         serialized.saveToAuthenticationSession(authSession, identityNote(requestHandle));
@@ -158,6 +162,45 @@ public class Oid4vpDirectPostService {
             return Response.ok("{}").type(MediaType.APPLICATION_JSON).build();
         }
         return Oid4vpEndpointResponseFactory.jsonRedirectResponse(redirectUrl);
+    }
+
+    static String legacyNote(String requestHandle) {
+        return "OID4VP_LEGACY_IDENTITY:" + requestHandle;
+    }
+
+    /**
+     * identityKeyScope=issuer migration: when no account is linked under the issuer-scoped key but
+     * one is linked under the subject-only key, move that link so the user keeps their account.
+     */
+    private void moveLegacyLink(BrokeredIdentityContext context, String legacyKey) {
+        moveLegacyLink(session, realm, config.getAlias(), context.getId(), context.getUsername(), legacyKey);
+    }
+
+    static boolean moveLegacyLink(
+            KeycloakSession session,
+            RealmModel realm,
+            String alias,
+            String scopedKey,
+            String username,
+            String legacyKey) {
+        var users = session.users();
+        if (users.getUserByFederatedIdentity(
+                        realm, new org.keycloak.models.FederatedIdentityModel(alias, scopedKey, username))
+                != null) {
+            return false;
+        }
+        var user = users.getUserByFederatedIdentity(
+                realm, new org.keycloak.models.FederatedIdentityModel(alias, legacyKey, username));
+        if (user == null) {
+            return false;
+        }
+        users.removeFederatedIdentity(realm, user, alias);
+        users.addFederatedIdentity(
+                realm, user, new org.keycloak.models.FederatedIdentityModel(alias, scopedKey, username));
+        LOG.infof(
+                "OID4VP IdP '%s': moved the account link of user %s to the issuer-scoped identity key",
+                alias, user.getId());
+        return true;
     }
 
     static String identityNote(String requestHandle) {
@@ -279,6 +322,12 @@ public class Oid4vpDirectPostService {
         }
 
         storedAuthSession.removeAuthNote(identityNote(requestHandle));
+
+        String legacyKey = storedAuthSession.getAuthNote(legacyNote(requestHandle));
+        storedAuthSession.removeAuthNote(legacyNote(requestHandle));
+        if (legacyKey != null) {
+            moveLegacyLink(context, legacyKey);
+        }
 
         event.event(EventType.LOGIN);
         Response response = callback.authenticated(context);

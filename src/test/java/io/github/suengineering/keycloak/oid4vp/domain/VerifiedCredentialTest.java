@@ -41,4 +41,19 @@ class VerifiedCredentialTest {
 
         assertThat(upper).isEqualTo(lower);
     }
+
+    @Test
+    void issuerScopedKeysKeepEqualIdentifiersFromDifferentIssuersApart() {
+        VerifiedCredential stateA = new VerifiedCredential(
+                "mdl", null, "org.iso.18013.5.1.mDL", Map.of(), PresentationType.MDOC, "mdoc|mDL|CN=IACA State A");
+        VerifiedCredential stateB = new VerifiedCredential(
+                "mdl", null, "org.iso.18013.5.1.mDL", Map.of(), PresentationType.MDOC, "mdoc|mDL|CN=IACA State B");
+
+        assertThat(stateA.generateIssuerScopedIdentityKey("D1234567", true))
+                .isNotEqualTo(stateB.generateIssuerScopedIdentityKey("D1234567", true))
+                .isEqualTo(stateA.generateIssuerScopedIdentityKey("d1234567", true));
+        // Subject-only keys, the default, are the same for both.
+        assertThat(stateA.generateCaseInsensitiveIdentityKey("D1234567"))
+                .isEqualTo(stateB.generateCaseInsensitiveIdentityKey("D1234567"));
+    }
 }
