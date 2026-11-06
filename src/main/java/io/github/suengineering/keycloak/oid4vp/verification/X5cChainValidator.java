@@ -92,6 +92,17 @@ public final class X5cChainValidator {
 
     static PublicKey validateCertChain(List<X509Certificate> chain, List<X509Certificate> trustedCertificates)
             throws Exception {
+        return anchorChain(chain, trustedCertificates).leafKey();
+    }
+
+    /**
+     * A validated chain: the leaf key, the trust anchor it ends at, and the presented certificates
+     * below that anchor (empty when the leaf itself is a pinned trusted certificate).
+     */
+    record AnchoredChain(PublicKey leafKey, X509Certificate anchor, List<X509Certificate> belowAnchor) {}
+
+    static AnchoredChain anchorChain(List<X509Certificate> chain, List<X509Certificate> trustedCertificates)
+            throws Exception {
         if (chain.isEmpty()) {
             throw new IllegalStateException("Empty x5c chain");
         }
@@ -139,7 +150,7 @@ public final class X5cChainValidator {
                 LOG.debugf(
                         "x5c leaf is a pinned trusted certificate: %s",
                         trusted.getSubjectX500Principal().getName());
-                return leaf.getPublicKey();
+                return new AnchoredChain(leaf.getPublicKey(), trusted, List.of());
             }
         }
         // Issuers often send their issuing CA along with the leaf. When that CA is itself a trusted
@@ -151,7 +162,7 @@ public final class X5cChainValidator {
                     LOG.debugf(
                             "x5c chain contains trusted certificate: %s",
                             trusted.getSubjectX500Principal().getName());
-                    return leaf.getPublicKey();
+                    return new AnchoredChain(leaf.getPublicKey(), trusted, List.copyOf(chain.subList(0, i)));
                 }
             }
         }
@@ -165,7 +176,7 @@ public final class X5cChainValidator {
                 LOG.debugf(
                         "x5c chain anchored by trusted certificate: %s",
                         trusted.getSubjectX500Principal().getName());
-                return leaf.getPublicKey();
+                return new AnchoredChain(leaf.getPublicKey(), trusted, List.copyOf(chain));
             } catch (Exception ignored) {
             }
         }

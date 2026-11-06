@@ -135,6 +135,7 @@ Keycloak does not check the registrar's trust chain or revocation status of eith
 | `trustListAllowUnsigned` | **Local testing only.** Accept the trust list without verifying its signature when no signing certificate is configured. | `false` |
 | `vicalUrl` | Optional VICAL (Verified Issuer Certificate Authority List) whose IACA certificates also anchor mDoc issuer chains. See [mDoc issuer trust](#mdoc-issuer-trust). | *(none)* |
 | `vicalSigningCertPem` | PEM certificate(s) the VICAL signature must chain to. Required with `vicalUrl`. | *(none)* |
+| `certificateRevocationCheck` | `none`, `soft` or `strict` revocation checking (OCSP, then CRL) of SD-JWT and mDoc issuer certificate chains. See [Certificate revocation](#certificate-revocation). | `none` |
 | `mdocCertificateProfile` | `none` validates mDoc issuer chains only; `iso18013-5` also enforces the ISO/IEC 18013-5 Annex B certificate profiles. | `none` |
 | `allowedIssuers` | Comma-separated list of allowed SD-JWT issuer (`iss`) values, or `*`. mDoc credentials are not checked against this list because mDoc does not define a standard canonical credential-issuer string equivalent to SD-JWT `iss`. | `*` |
 | `clockSkewSeconds` | Clock skew tolerance for credential verification. | `60` |
@@ -165,6 +166,16 @@ Within the accepted trust list, credential signature verification uses only `...
 - Only services whose current status is granted (or recognised at national level) and whose type is in `trustListServiceTypes` become trust anchors. No type is accepted by default. Do not list broad types such as `http://uri.etsi.org/TrstSvc/Svctype/CA/QC`: every qualified certificate holder chains to those CAs and could then sign credentials. Use the type your credential issuers are registered under, for example `http://uri.etsi.org/TrstSvc/Svctype/EAA/Q` for qualified electronic attestation of attributes.
 - The cache follows the earliest `NextUpdate` across the loaded lists, capped by `trustListMaxCacheTtl`. Service history is not evaluated: only the current status counts.
 - `trustListLoTEType`, if set, is compared with the list's `TSLType`.
+
+### Certificate revocation
+
+With `certificateRevocationCheck` set to `soft` or `strict`, every certificate of an SD-JWT `x5c` chain or an mDoc `x5chain` below its trust anchor is checked for revocation. The anchor itself comes from the trust list and is not checked.
+
+- OCSP first, using the responder in the certificate's authority information access extension. The response must be signed by the issuing CA or by a responder certificate that CA issued with the OCSP signing key purpose, must cover the certificate, and must be current.
+- If OCSP gives no usable answer, the CRL distribution points are tried. The CRL must be issued and signed by the issuing CA and must not be past its next update.
+- `soft` rejects revoked certificates and accepts certificates whose status cannot be determined, with a warning. `strict` also rejects those, including certificates without any OCSP responder or CRL distribution point.
+
+Answers are cached until their next update, at most 24 hours. Requests go through Keycloak's HTTP client, so its proxy settings apply. Trust list, status list and VICAL signing certificates are not checked.
 
 ### mDoc issuer trust
 

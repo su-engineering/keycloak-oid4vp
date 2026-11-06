@@ -58,6 +58,13 @@ public class MdocVerifier {
     private static final Logger LOG = Logger.getLogger(MdocVerifier.class);
 
     private final MdocCertificateProfile certificateProfile;
+    private CertificateRevocationChecker revocationChecker = CertificateRevocationChecker.DISABLED;
+
+    /** Checks document signer chains for revocation (CRL/OCSP) with {@code checker}. */
+    public MdocVerifier withRevocationChecker(CertificateRevocationChecker checker) {
+        this.revocationChecker = checker != null ? checker : CertificateRevocationChecker.DISABLED;
+        return this;
+    }
 
     public MdocVerifier() {
         this(MdocCertificateProfile.NONE);
@@ -318,7 +325,9 @@ public class MdocVerifier {
             if (x5chain == null || x5chain.isEmpty()) {
                 throw new IllegalStateException("issuerAuth has no x5chain");
             }
-            PublicKey leafKey = X5cChainValidator.validateCertChain(x5chain, trustedCertificates);
+            X5cChainValidator.AnchoredChain anchored = X5cChainValidator.anchorChain(x5chain, trustedCertificates);
+            revocationChecker.check(anchored);
+            PublicKey leafKey = anchored.leafKey();
             if (certificateProfile == MdocCertificateProfile.ISO_18013_5) {
                 Iso18013CertificateProfile.check(
                         x5chain, trustedCertificates, parseInstant(val(map(mso, "validityInfo"), "signed")));

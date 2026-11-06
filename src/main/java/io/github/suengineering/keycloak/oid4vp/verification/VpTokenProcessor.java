@@ -81,7 +81,8 @@ public class VpTokenProcessor {
             java.util.Set<String> trustListTerritories,
             String vicalUrl,
             List<X509Certificate> vicalSigningCerts,
-            MdocCertificateProfile mdocCertificateProfile) {}
+            MdocCertificateProfile mdocCertificateProfile,
+            CertificateRevocationChecker.Mode certificateRevocationCheck) {}
 
     public record Request(
             String vpToken,
@@ -150,7 +151,10 @@ public class VpTokenProcessor {
                 config.didResolver(),
                 new JwtVcIssuerMetadataResolver(config.session(), config.issuerMetadataMaxCacheTtl()),
                 config.strictX5cVerification());
-        this.mdocVerifier = new MdocVerifier(config.mdocCertificateProfile());
+        CertificateRevocationChecker revocationChecker =
+                new CertificateRevocationChecker(config.session(), config.certificateRevocationCheck());
+        this.sdJwtVerifier.withRevocationChecker(revocationChecker);
+        this.mdocVerifier = new MdocVerifier(config.mdocCertificateProfile()).withRevocationChecker(revocationChecker);
         this.vicalProvider = StringUtil.isBlank(config.vicalUrl())
                 ? null
                 : new VicalProvider(

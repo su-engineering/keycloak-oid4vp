@@ -21,6 +21,7 @@ import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpClientIdScheme;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpSigningKeyParser;
+import io.github.suengineering.keycloak.oid4vp.verification.CertificateRevocationChecker;
 import io.github.suengineering.keycloak.oid4vp.verification.RegistrationCertificate;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -285,6 +286,21 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .label("VICAL Signing Certificate (PEM)")
                 .helpText("PEM certificate(s) the VICAL signature must chain to. Required when a VICAL URL is set.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.CERTIFICATE_REVOCATION_CHECK)
+                .label("Issuer Certificate Revocation Check")
+                .helpText(
+                        "Check SD-JWT and mDoc issuer certificate chains for revocation, below the trust anchor: OCSP "
+                                + "first, then CRL distribution points. none: no check. soft: reject revoked certificates, accept "
+                                + "when the status cannot be determined. strict: also reject when no OCSP responder or CRL gives "
+                                + "a current, correctly signed answer.")
+                .type(ProviderConfigProperty.LIST_TYPE)
+                .options(List.of(
+                        CertificateRevocationChecker.Mode.NONE.configValue(),
+                        CertificateRevocationChecker.Mode.SOFT.configValue(),
+                        CertificateRevocationChecker.Mode.STRICT.configValue()))
+                .defaultValue(CertificateRevocationChecker.Mode.NONE.configValue())
                 .add()
                 .property()
                 .name(Oid4vpIdentityProviderConfig.MDOC_CERTIFICATE_PROFILE)

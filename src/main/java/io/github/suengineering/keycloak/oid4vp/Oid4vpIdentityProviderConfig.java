@@ -23,6 +23,7 @@ import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpResponseMode;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
 import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryValidator;
+import io.github.suengineering.keycloak.oid4vp.verification.CertificateRevocationChecker;
 import io.github.suengineering.keycloak.oid4vp.verification.RegistrationCertificate;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -81,6 +82,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String VICAL_URL = "vicalUrl";
     public static final String VICAL_SIGNING_CERT_PEM = "vicalSigningCertPem";
     public static final String MDOC_CERTIFICATE_PROFILE = "mdocCertificateProfile";
+    public static final String CERTIFICATE_REVOCATION_CHECK = "certificateRevocationCheck";
     public static final String TRUST_LIST_ALLOW_UNSIGNED = "trustListAllowUnsigned";
     public static final String TRUSTED_AUTHORITIES_MODE = "trustedAuthoritiesMode";
     public static final String TRUST_LIST_LOTE_TYPE = "trustListLoTEType";
@@ -352,6 +354,10 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public String getVicalSigningCertPem() {
         return normalizePemConfigValue(getConfig().get(VICAL_SIGNING_CERT_PEM));
+    }
+
+    public CertificateRevocationChecker.Mode getCertificateRevocationCheck() {
+        return CertificateRevocationChecker.Mode.resolve(getConfig().get(CERTIFICATE_REVOCATION_CHECK));
     }
 
     public MdocCertificateProfile getMdocCertificateProfile() {

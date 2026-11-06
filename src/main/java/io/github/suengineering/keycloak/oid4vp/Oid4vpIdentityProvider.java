@@ -126,7 +126,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                                 config.getTrustListTerritories(),
                                 config.getVicalUrl(),
                                 parseTrustListSigningCerts(config.getVicalSigningCertPem()),
-                                config.getMdocCertificateProfile())));
+                                config.getMdocCertificateProfile(),
+                                config.getCertificateRevocationCheck())));
 
         RealmModel realm = session.getContext().getRealm();
         int loginTimeoutSeconds = realm != null ? realm.getAccessCodeLifespanLogin() : DEFAULT_LOGIN_TIMEOUT_SECONDS;
