@@ -70,16 +70,18 @@ class StatusListVerifierTest {
     }
 
     @Test
-    void returnsNullForMalformedStatusList() {
+    void rejectsStatusListWithoutIndex() {
         Map<String, Object> payload = Map.of("status", Map.of("status_list", Map.of("uri", "https://example.com")));
-        assertThat(verifier.extractStatusReference(payload)).isNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> verifier.extractStatusReference(payload))
+                .hasMessageContaining("Malformed status_list");
     }
 
     @Test
-    void returnsNullForNonNumericStatusIndex() {
+    void rejectsNonNumericStatusIndex() {
         Map<String, Object> payload =
                 Map.of("status", Map.of("status_list", Map.of("uri", "https://example.com", "idx", "abc")));
-        assertThat(verifier.extractStatusReference(payload)).isNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> verifier.extractStatusReference(payload))
+                .hasMessageContaining("Malformed status_list");
     }
 
     @Test
@@ -641,5 +643,30 @@ class StatusListVerifierTest {
                             new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA")
                                     .build(issuer.getPrivate())));
         }
+    }
+
+    @org.junit.jupiter.api.Test
+    void unreadableStatusListReferencesFailClosed() {
+        StatusListVerifier verifier = new StatusListVerifier();
+        for (Object statusList : java.util.List.<Object>of(
+                "not-a-map",
+                java.util.Map.of("uri", "https://status.example/1", "idx", -1),
+                java.util.Map.of("uri", "https://status.example/1", "idx", 4_294_967_296L),
+                java.util.Map.of("idx", 3))) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> verifier.extractStatusReference(
+                            java.util.Map.of("status", java.util.Map.of("status_list", statusList))))
+                    .as("status_list %s", statusList)
+                    .hasMessageContaining("Malformed status_list");
+        }
+        org.assertj.core.api.Assertions.assertThat(verifier.extractStatusReference(
+                        java.util.Map.of("status", java.util.Map.of("other_mechanism", java.util.Map.of()))))
+                .isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    void negativeIndexesNeverReadAsValid() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> StatusListVerifier.getStatusAtIndex(new byte[] {(byte) 0xff}, -3, 1))
+                .hasMessageContaining("negative");
     }
 }

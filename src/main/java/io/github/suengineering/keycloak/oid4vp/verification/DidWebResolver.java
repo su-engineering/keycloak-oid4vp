@@ -240,6 +240,7 @@ public class DidWebResolver implements DidResolver {
     private String fetchDidDocument(String url) {
         try {
             LOG.debugf("Fetching DID document from %s", url);
+            io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.check(session, url);
             String response = SimpleHttp.doGet(url, session)
                     .header("Accept", "application/did+json,application/json")
                     .setMaxConsumedResponseSize(MAX_DID_DOCUMENT_BYTES)

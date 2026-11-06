@@ -62,6 +62,16 @@ public class VpTokenProcessor {
     private final String expectedTrustListLoTEType;
     private final DidResolver didResolver;
     private final VicalProvider vicalProvider;
+    private java.util.function.Predicate<String> issuerAllowed = issuer -> true;
+
+    /**
+     * The issuer allowlist, applied to the unverified {@code iss} before any key, DID or status list
+     * is fetched for it, and again to the verified issuer.
+     */
+    public VpTokenProcessor withIssuerFilter(java.util.function.Predicate<String> issuerAllowed) {
+        this.issuerAllowed = issuerAllowed != null ? issuerAllowed : issuer -> true;
+        return this;
+    }
 
     public record Config(
             KeycloakSession session,
@@ -298,10 +308,17 @@ public class VpTokenProcessor {
             throw new IdentityBrokerException("org-iso-mdoc responses carry only mDoc documents: " + credentialId);
         }
         if (sdJwtVerifier.isSdJwt(credential)) {
+            String claimedIssuer = SdJwtVerifier.unverifiedIssuer(credential);
+            if (claimedIssuer != null && !issuerAllowed.test(claimedIssuer)) {
+                throw new IdentityBrokerException("Issuer not allowed: " + claimedIssuer);
+            }
             SdJwtVerificationResult result =
                     verifySdJwtWithFallback(credential, clientId, expectedNonce, trustedCerts, alternateResponseUri);
             if (StringUtil.isBlank(result.issuer())) {
                 throw new IdentityBrokerException("SD-JWT credential has no issuer: " + credentialId);
+            }
+            if (!issuerAllowed.test(result.issuer())) {
+                throw new IdentityBrokerException("Issuer not allowed: " + result.issuer());
             }
             // The status reference must be issuer-signed, not selectively disclosable.
             if (result.claims().containsKey("status")

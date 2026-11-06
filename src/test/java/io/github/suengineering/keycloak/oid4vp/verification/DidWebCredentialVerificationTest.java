@@ -144,6 +144,11 @@ class DidWebCredentialVerificationTest {
         }
         String presentation = unbound + kbJwt.serialize();
         KeycloakSession session = mock(KeycloakSession.class);
+        // Hosts here are fictional and served by mocks; the address policy is tested separately.
+        org.mockito.Mockito.when(session.getAttribute(
+                        io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.ALLOW_PRIVATE_NETWORKS_ATTRIBUTE,
+                        Boolean.class))
+                .thenReturn(true);
         SimpleHttp http = mock(SimpleHttp.class);
         when(http.header("Accept", "application/did+json,application/json")).thenReturn(http);
         when(http.setMaxConsumedResponseSize(DidWebResolver.MAX_DID_DOCUMENT_BYTES))

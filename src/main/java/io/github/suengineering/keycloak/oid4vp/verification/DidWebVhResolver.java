@@ -102,6 +102,7 @@ public final class DidWebVhResolver implements DidResolver {
     }
 
     private static String fetch(KeycloakSession session, String url) {
+        io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.check(session, url);
         HttpGet request = new HttpGet(url);
         // Keep Keycloak's TLS/proxy configuration, but never follow a redirect to another scheme or host.
         request.setConfig(RequestConfig.custom()

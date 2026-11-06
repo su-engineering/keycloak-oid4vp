@@ -102,6 +102,8 @@ public class JwtVcIssuerMetadataResolver {
     }
 
     protected FetchResult fetchJson(String url) throws Exception {
+        // The issuer URL and jwks_uri come from the presented credential and its metadata.
+        io.github.suengineering.keycloak.oid4vp.util.OutboundUrlPolicy.check(session, url);
         if (session != null) {
             try (SimpleHttp.Response response =
                     SimpleHttp.doGet(url, session).acceptJson().asResponse()) {

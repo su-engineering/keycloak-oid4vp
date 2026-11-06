@@ -200,7 +200,7 @@ class SdJwtVerifierDidIntegrationTest {
 
             SdJwtVerificationResult result = verifier.verify(sdJwt, null, null, List.of(x509Cert));
 
-            assertThat(result.issuer()).isEqualTo("https://fallback-issuer.example");
+            assertThat(result.issuer()).isEqualTo("https://issuer.example");
         }
 
         @Test
@@ -210,7 +210,7 @@ class SdJwtVerifierDidIntegrationTest {
             String sdJwt = buildSdJwtWithProperX5cChain();
             SdJwtVerificationResult result = verifierWithoutDid.verify(sdJwt, null, null, List.of(x509Cert));
 
-            assertThat(result.issuer()).isEqualTo("https://fallback-issuer.example");
+            assertThat(result.issuer()).isEqualTo("https://issuer.example");
         }
 
         @Test
@@ -281,7 +281,7 @@ class SdJwtVerifierDidIntegrationTest {
             String sdJwt = buildSdJwtWithProperX5cChain();
             SdJwtVerificationResult result = verifier.verify(sdJwt, null, null, List.of(x509Cert));
 
-            assertThat(result.issuer()).isEqualTo("https://fallback-issuer.example");
+            assertThat(result.issuer()).isEqualTo("https://issuer.example");
         }
 
         @Test
@@ -389,7 +389,7 @@ class SdJwtVerifierDidIntegrationTest {
         java.security.cert.X509Certificate entityCert = generateCaSignedCert(entityKey, caKey, x509Cert);
 
         String jwt = buildSignedJwtWithX5c(
-                Map.of("iss", "https://fallback-issuer.example", "vct", "FallbackCredential"),
+                Map.of("iss", "https://issuer.example", "vct", "FallbackCredential"),
                 entityKey,
                 List.of(entityCert, x509Cert));
         return jwt + "~";
@@ -397,7 +397,7 @@ class SdJwtVerifierDidIntegrationTest {
 
     private String buildSdJwtWithX5c(ECKey signingKey, java.security.cert.X509Certificate cert) throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .issuer("https://fallback-issuer.example")
+                .issuer("https://issuer.example")
                 .claim("vct", "FallbackCredential")
                 .issueTime(Date.from(Instant.now()))
                 .expirationTime(Date.from(Instant.now().plus(1, ChronoUnit.DAYS)))

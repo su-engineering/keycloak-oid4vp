@@ -167,6 +167,8 @@ public final class Oid4vpTestKeycloakSetup {
         }
         config.put(Oid4vpIdentityProviderConfig.TRUSTED_AUTHORITIES_MODE, "none");
         config.put(Oid4vpIdentityProviderConfig.STATUS_LIST_MAX_CACHE_TTL_SECONDS, "0");
+        // The test wallets serve status lists and metadata from the Docker network.
+        config.put(Oid4vpIdentityProviderConfig.ALLOW_PRIVATE_NETWORK_FETCH, "true");
         config.put(Oid4vpIdentityProviderConfig.X509_CERTIFICATE_PEM, spec.x509CertPem());
         if (spec.clientIdScheme() != null) {
             config.put(Oid4vpIdentityProviderConfig.CLIENT_ID_SCHEME, spec.clientIdScheme());
