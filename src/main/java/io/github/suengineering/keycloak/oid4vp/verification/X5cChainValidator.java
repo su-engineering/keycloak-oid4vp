@@ -141,6 +141,7 @@ public final class X5cChainValidator {
                 throw new IllegalStateException(
                         "x5c issuer certificate at position " + (i + 1) + " is not a CA certificate");
             }
+            requireIssuingCa(certificate, issuer, i);
             certificate.verify(issuer.getPublicKey());
         }
 
@@ -177,12 +178,15 @@ public final class X5cChainValidator {
             }
             try {
                 topOfChain.verify(trusted.getPublicKey());
-                LOG.debugf(
-                        "x5c chain anchored by trusted certificate: %s",
-                        trusted.getSubjectX500Principal().getName());
-                return new AnchoredChain(leaf.getPublicKey(), trusted, List.copyOf(chain));
             } catch (Exception ignored) {
+                continue; // not this anchor
             }
+            // This anchor signed the chain; its path rules decide, with no fallback to another anchor.
+            requireIssuingCa(topOfChain, trusted, chain.size() - 1);
+            LOG.debugf(
+                    "x5c chain anchored by trusted certificate: %s",
+                    trusted.getSubjectX500Principal().getName());
+            return new AnchoredChain(leaf.getPublicKey(), trusted, List.copyOf(chain));
         }
 
         throw new IllegalStateException("x5c chain not anchored by any trusted certificate");
@@ -268,6 +272,28 @@ public final class X5cChainValidator {
     }
 
     /** Returns the trusted certificates that are within their validity period. */
+    /**
+     * RFC 5280 path rules for {@code issuer} signing {@code certificate}: names chain, key usage (if
+     * present) allows certificate signing, and {@code casBelow} CA certificates under the issuer stay
+     * within its path length constraint.
+     */
+    private static void requireIssuingCa(X509Certificate certificate, X509Certificate issuer, int casBelow) {
+        if (!certificate.getIssuerX500Principal().equals(issuer.getSubjectX500Principal())) {
+            throw new IllegalStateException("x5c chain names do not link: "
+                    + certificate.getSubjectX500Principal().getName() + " is not issued by "
+                    + issuer.getSubjectX500Principal().getName());
+        }
+        boolean[] keyUsage = issuer.getKeyUsage();
+        if (keyUsage != null && (keyUsage.length < 6 || !keyUsage[5])) {
+            throw new IllegalStateException(
+                    "x5c issuer " + issuer.getSubjectX500Principal().getName() + " may not sign certificates");
+        }
+        if (casBelow > issuer.getBasicConstraints()) {
+            throw new IllegalStateException("x5c chain exceeds the path length of "
+                    + issuer.getSubjectX500Principal().getName());
+        }
+    }
+
     static List<X509Certificate> currentlyValid(List<X509Certificate> certificates) {
         if (certificates == null) {
             return List.of();

@@ -358,4 +358,53 @@ class X5cChainValidatorTest {
         builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(isCa));
         return new JcaX509CertificateConverter().getCertificate(builder.build(signer));
     }
+
+    @Test
+    void validateCertChain_enforcesPathLengthAndNameChaining() throws Exception {
+        // caCert has no path length limit here, so build a pathLen-0 CA with an intermediate below it.
+        KeyPair rootKp = generateKeyPair();
+        var rootBuilder = new JcaX509v3CertificateBuilder(
+                new X500Principal("CN=Root"),
+                BigInteger.valueOf(System.nanoTime()),
+                Date.from(Instant.now().minus(1, ChronoUnit.HOURS)),
+                Date.from(Instant.now().plus(30, ChronoUnit.DAYS)),
+                new X500Principal("CN=Root"),
+                rootKp.getPublic());
+        rootBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(0));
+        X509Certificate root = new JcaX509CertificateConverter()
+                .getCertificate(
+                        rootBuilder.build(new JcaContentSignerBuilder("SHA256withECDSA").build(rootKp.getPrivate())));
+        KeyPair intermediateKp = generateKeyPair();
+        X509Certificate intermediate = generateCert(
+                intermediateKp,
+                rootKp,
+                "CN=Intermediate",
+                "CN=Root",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(10, ChronoUnit.DAYS),
+                true);
+        KeyPair leafKp = generateKeyPair();
+        X509Certificate leaf = generateCert(
+                leafKp,
+                intermediateKp,
+                "CN=Leaf",
+                "CN=Intermediate",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+
+        assertThatThrownBy(() -> X5cChainValidator.validateCertChain(List.of(leaf, intermediate), List.of(root)))
+                .hasMessageContaining("path length");
+
+        X509Certificate misnamed = generateCert(
+                leafKp,
+                caKeyPair,
+                "CN=Leaf",
+                "CN=Someone Else",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                false);
+        assertThatThrownBy(() -> X5cChainValidator.validateCertChain(List.of(misnamed, caCert), List.of(caCert)))
+                .hasMessageContaining("do not link");
+    }
 }

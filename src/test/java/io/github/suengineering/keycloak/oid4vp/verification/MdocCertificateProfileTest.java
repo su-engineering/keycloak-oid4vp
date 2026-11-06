@@ -77,8 +77,9 @@ class MdocCertificateProfileTest {
         MdocTrustTestPki pki = new MdocTrustTestPki("US", false);
         MdocTrustTestPki.DocumentSigner signer = pki.documentSigner("US", true);
 
-        assertThatThrownBy(() -> verify(strict, pki, signer, List.of(signer.certificate())))
-                .hasMessageContaining("keyCertSign");
+        // Chain validation itself now refuses an issuer whose key usage forbids certificate signing.
+        assertThatThrownBy(() -> verify(new MdocVerifier(), pki, signer, List.of(signer.certificate())))
+                .hasMessageContaining("may not sign certificates");
     }
 
     @Test
