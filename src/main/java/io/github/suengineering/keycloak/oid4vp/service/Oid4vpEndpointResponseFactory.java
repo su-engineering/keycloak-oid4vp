@@ -20,7 +20,6 @@ import io.github.suengineering.keycloak.oid4vp.Oid4vpIdentityProviderConfig;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriBuilder;
 import java.util.Map;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.KeycloakSession;
@@ -72,14 +71,22 @@ public class Oid4vpEndpointResponseFactory {
     public String buildErrorRedirectUri(String error, String errorDescription, String state) {
         String base = Oid4vpConstants.buildEndpointBaseUrl(
                 session.getContext().getUri().getBaseUri(), realm.getName(), config.getAlias());
-        UriBuilder builder = UriBuilder.fromUri(base);
+        // Encoded by hand: UriBuilder.queryParam treats {...} in values as template variables.
+        StringBuilder url = new StringBuilder(base).append('?');
         if (state != null) {
-            builder.queryParam(OAuth2Constants.STATE, state);
+            url.append(OAuth2Constants.STATE).append('=').append(encode(state)).append('&');
         }
-        builder.queryParam(OAuth2Constants.ERROR, error);
+        url.append(OAuth2Constants.ERROR).append('=').append(encode(error));
         if (errorDescription != null) {
-            builder.queryParam(OAuth2Constants.ERROR_DESCRIPTION, errorDescription);
+            url.append('&')
+                    .append(OAuth2Constants.ERROR_DESCRIPTION)
+                    .append('=')
+                    .append(encode(errorDescription));
         }
-        return builder.build().toString();
+        return url.toString();
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }
 }

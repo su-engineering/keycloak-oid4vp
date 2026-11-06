@@ -107,6 +107,7 @@ class Oid4vpDcApiServiceTest {
         when(provider.getCallbackProcessor()).thenReturn(callbackProcessor);
 
         store = mock(Oid4vpRequestObjectStore.class);
+        when(store.removeRequestContext(any(), anyString())).thenReturn(true);
         when(store.resolveFlowHandle(session, HANDLE))
                 .thenReturn(new Oid4vpRequestObjectStore.FlowContextEntry(
                         "root-1", "tab-1", "https://kc/realms/test/", null, "dc_api"));

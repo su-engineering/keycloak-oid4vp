@@ -61,6 +61,9 @@ public class Oid4vpDirectPostService {
     static final String KEY_ROOT_SESSION_ID = "root_session_id";
     static final String KEY_TAB_ID = "tab_id";
     static final String KEY_COMPLETE_AUTH_URL = "complete_auth_url";
+    static final String KEY_RESPONSE_CODE_HASH = "response_code_hash";
+    public static final String PARAM_RESPONSE_CODE = "response_code";
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
 
     private final long deferredAuthTtlSeconds;
     private final long crossDeviceCompleteTtlSeconds;
@@ -104,7 +107,8 @@ public class Oid4vpDirectPostService {
 
         context.setAuthenticationSession(authSession);
         SerializedBrokeredIdentityContext serialized = SerializedBrokeredIdentityContext.serialize(context);
-        serialized.saveToAuthenticationSession(authSession, DEFERRED_IDENTITY_NOTE);
+        // One note per flow handle: a response posted to another handle of the same page cannot replace it.
+        serialized.saveToAuthenticationSession(authSession, identityNote(requestHandle));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> claims =
@@ -112,13 +116,25 @@ public class Oid4vpDirectPostService {
         if (claims != null) {
             try {
                 String claimsJson = JsonSerialization.writeValueAsString(claims);
-                authSession.setAuthNote(DEFERRED_CLAIMS_NOTE, claimsJson);
+                authSession.setAuthNote(claimsNote(requestHandle), claimsJson);
             } catch (Exception e) {
                 LOG.warnf("Failed to serialize claims: %s", e.getMessage());
             }
         }
 
         String completeAuthUrl = buildCompleteAuthUrl(requestHandle);
+        // OID4VP 1.0 section 13.3: the same-device redirect carries a fresh response_code that
+        // completion requires, so a response to a request the attacker started and handed to a
+        // victim cannot be completed from the attacker's browser.
+        String responseCode = null;
+        if (!isCrossDevice) {
+            byte[] code = new byte[32];
+            RANDOM.nextBytes(code);
+            responseCode = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(code);
+        }
+        String redirectUrl = responseCode == null
+                ? completeAuthUrl
+                : completeAuthUrl + "&" + PARAM_RESPONSE_CODE + "=" + responseCode;
         session.singleUseObjects()
                 .put(
                         DEFERRED_AUTH_PREFIX + requestHandle,
@@ -127,7 +143,9 @@ public class Oid4vpDirectPostService {
                                 KEY_ROOT_SESSION_ID,
                                 rootSessionId != null ? rootSessionId : "",
                                 KEY_TAB_ID,
-                                tabId != null ? tabId : ""));
+                                tabId != null ? tabId : "",
+                                KEY_RESPONSE_CODE_HASH,
+                                responseCode != null ? sha256(responseCode) : ""));
         if (isCrossDevice) {
             session.singleUseObjects()
                     .put(
@@ -139,7 +157,38 @@ public class Oid4vpDirectPostService {
         if (isCrossDevice) {
             return Response.ok("{}").type(MediaType.APPLICATION_JSON).build();
         }
-        return Oid4vpEndpointResponseFactory.jsonRedirectResponse(completeAuthUrl);
+        return Oid4vpEndpointResponseFactory.jsonRedirectResponse(redirectUrl);
+    }
+
+    static String identityNote(String requestHandle) {
+        return DEFERRED_IDENTITY_NOTE + ":" + requestHandle;
+    }
+
+    static String claimsNote(String requestHandle) {
+        return DEFERRED_CLAIMS_NOTE + ":" + requestHandle;
+    }
+
+    private static String sha256(String value) {
+        try {
+            return java.util.Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** True when the flow needs no response code (cross-device) or the given one matches. */
+    private boolean responseCodeMatches(String requestHandle, String responseCode) {
+        Map<String, String> signal = session.singleUseObjects().get(DEFERRED_AUTH_PREFIX + requestHandle);
+        if (signal == null) return true; // reported as expired below
+        String expected = signal.get(KEY_RESPONSE_CODE_HASH);
+        if (expected == null || expected.isEmpty()) return true;
+        return responseCode != null
+                && java.security.MessageDigest.isEqual(
+                        expected.getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                        sha256(responseCode).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
 
     /**
@@ -149,6 +198,14 @@ public class Oid4vpDirectPostService {
      */
     public Response completeAuth(
             String requestHandle, AbstractIdentityProvider.AuthenticationCallback callback, EventBuilder event) {
+        return completeAuth(requestHandle, null, callback, event);
+    }
+
+    public Response completeAuth(
+            String requestHandle,
+            String responseCode,
+            AbstractIdentityProvider.AuthenticationCallback callback,
+            EventBuilder event) {
 
         AuthenticationSessionModel storedAuthSession = resolveExpectedAuthSession(requestHandle);
         if (storedAuthSession == null) {
@@ -172,6 +229,15 @@ public class Oid4vpDirectPostService {
         // session is only used to recover deferred broker state that was serialized earlier.
         AuthenticationSessionModel activeAuthSession = currentBrowserSession;
 
+        // Checked before anything is consumed, so a wrong code cannot burn the legitimate completion.
+        if (!responseCodeMatches(requestHandle, responseCode)) {
+            return ErrorPage.error(
+                    session,
+                    activeAuthSession,
+                    Response.Status.BAD_REQUEST,
+                    "This sign-in link is not valid for this browser. Please restart the login flow.");
+        }
+
         session.singleUseObjects().remove(CROSS_DEVICE_COMPLETE_PREFIX + requestHandle);
         Map<String, String> consumedSignal = session.singleUseObjects().remove(DEFERRED_AUTH_PREFIX + requestHandle);
         if (consumedSignal == null) {
@@ -184,7 +250,7 @@ public class Oid4vpDirectPostService {
 
         SerializedBrokeredIdentityContext serializedCtx =
                 SerializedBrokeredIdentityContext.readFromAuthenticationSession(
-                        storedAuthSession, DEFERRED_IDENTITY_NOTE);
+                        storedAuthSession, identityNote(requestHandle));
         if (serializedCtx == null) {
             return ErrorPage.error(
                     session,
@@ -200,7 +266,7 @@ public class Oid4vpDirectPostService {
         context.setAuthenticationSession(activeAuthSession);
         context.getContextData().keySet().removeIf(key -> key.startsWith("user.attributes."));
 
-        String claimsJson = storedAuthSession.getAuthNote(DEFERRED_CLAIMS_NOTE);
+        String claimsJson = storedAuthSession.getAuthNote(claimsNote(requestHandle));
         if (claimsJson != null) {
             try {
                 @SuppressWarnings("unchecked")
@@ -209,10 +275,10 @@ public class Oid4vpDirectPostService {
             } catch (Exception e) {
                 LOG.warnf("Failed to deserialize claims: %s", e.getMessage());
             }
-            storedAuthSession.removeAuthNote(DEFERRED_CLAIMS_NOTE);
+            storedAuthSession.removeAuthNote(claimsNote(requestHandle));
         }
 
-        storedAuthSession.removeAuthNote(DEFERRED_IDENTITY_NOTE);
+        storedAuthSession.removeAuthNote(identityNote(requestHandle));
 
         event.event(EventType.LOGIN);
         Response response = callback.authenticated(context);

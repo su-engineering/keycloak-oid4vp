@@ -213,16 +213,18 @@ public class Oid4vpRequestObjectStore {
         return resolveByState(session, state);
     }
 
-    public void removeRequestContext(KeycloakSession session, String state) {
-        if (StringUtil.isBlank(state)) return;
+    /** Removes the request context; {@code true} only for the caller that actually removed it. */
+    public boolean removeRequestContext(KeycloakSession session, String state) {
+        if (StringUtil.isBlank(state)) return false;
         SingleUseObjectProvider store = session.singleUseObjects();
         Map<String, String> stateEntry = store.remove(STATE_INDEX_PREFIX + state);
-        if (stateEntry == null) return;
+        if (stateEntry == null) return false;
 
         String kid = blankToNull(stateEntry.get(KEY_KID));
         if (kid != null) {
             store.remove(KID_INDEX_PREFIX + kid);
         }
+        return true;
     }
 
     private void removeKidIndex(KeycloakSession session, String kid, String state) {

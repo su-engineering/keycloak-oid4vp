@@ -55,6 +55,8 @@ import org.keycloak.util.JsonSerialization;
 
 class Oid4vpIdentityProviderEndpointTest {
 
+    private EventBuilder event;
+
     private Oid4vpIdentityProviderEndpoint endpoint;
     private KeycloakSession session;
     private Oid4vpIdentityProvider provider;
@@ -93,7 +95,7 @@ class Oid4vpIdentityProviderEndpointTest {
         when(session.singleUseObjects()).thenReturn(mock(SingleUseObjectProvider.class));
 
         callback = mock(AbstractIdentityProvider.AuthenticationCallback.class);
-        EventBuilder event = mock(EventBuilder.class, RETURNS_SELF);
+        event = mock(EventBuilder.class, RETURNS_SELF);
 
         store = mock(Oid4vpRequestObjectStore.class);
 
@@ -118,7 +120,7 @@ class Oid4vpIdentityProviderEndpointTest {
         when(store.resolveByState(session, "state-1"))
                 .thenReturn(requestContext("handle-1", "state-1", "nonce-1", null, "same_device"));
         Response expected = Response.status(400).entity("rendered").build();
-        when(callback.error(config, "access_denied: denied")).thenReturn(expected);
+        when(callback.error(config, "Sign-in was cancelled in the wallet.")).thenReturn(expected);
 
         Response response = endpoint.handleGet("state-1", "access_denied", "denied");
 
@@ -138,13 +140,13 @@ class Oid4vpIdentityProviderEndpointTest {
 
     @Test
     void handleGet_whenCallbackFailsFallsBackToPlainTextResponse() {
-        when(callback.error(config, "access_denied"))
+        when(callback.error(config, "Sign-in was cancelled in the wallet."))
                 .thenThrow(new RuntimeException("simulated callback rendering failure"));
 
         Response response = endpoint.handleGet(null, "access_denied", null);
 
         assertThat(response.getStatus()).isEqualTo(400);
-        assertThat(response.getEntity()).isEqualTo("Authentication failed: access_denied");
+        assertThat(response.getEntity()).isEqualTo("Sign-in was cancelled in the wallet.");
     }
 
     @Test
@@ -171,10 +173,15 @@ class Oid4vpIdentityProviderEndpointTest {
         assertThat((String) response.getEntity())
                 .contains("\"error\":\"access_denied\"")
                 .contains("access_denied")
-                .contains("Wallet rejected")
+                .contains("access_denied")
+                .doesNotContain("Wallet rejected")
                 .doesNotContain("redirect_uri")
                 .doesNotContain("server_error")
                 .doesNotContain("Ignore me");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("Wallet rejected"));
     }
 
     @Test
@@ -188,7 +195,14 @@ class Oid4vpIdentityProviderEndpointTest {
         Response response = endpoint.handlePost("state-actual", null, null, encryptedResponse, null, null);
 
         assertThat(response.getStatus()).isEqualTo(200);
-        assertThat((String) response.getEntity()).contains("redirect_uri").contains("state+does+not+match");
+        assertThat((String) response.getEntity())
+                .contains("redirect_uri")
+                .contains("error=")
+                .doesNotContain("state+does+not+match");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("state does not match"));
     }
 
     @Test
@@ -205,8 +219,13 @@ class Oid4vpIdentityProviderEndpointTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat((String) response.getEntity())
                 .contains("\"error\":\"access_denied\"")
-                .contains("Wallet rejected")
+                .contains("access_denied")
+                .doesNotContain("Wallet rejected")
                 .doesNotContain("redirect_uri");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("Wallet rejected"));
         verify(store).resolveByKid(session, "kid-retry");
     }
 
@@ -224,8 +243,13 @@ class Oid4vpIdentityProviderEndpointTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat((String) response.getEntity())
                 .contains("\"error\":\"access_denied\"")
-                .contains("Wallet rejected")
+                .contains("access_denied")
+                .doesNotContain("Wallet rejected")
                 .doesNotContain("redirect_uri");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("Wallet rejected"));
         verify(store, times(2)).resolveByKid(session, "kid-delayed");
     }
 
@@ -245,8 +269,13 @@ class Oid4vpIdentityProviderEndpointTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat((String) response.getEntity())
                 .contains("\"error\":\"access_denied\"")
-                .contains("Wallet rejected")
+                .contains("access_denied")
+                .doesNotContain("Wallet rejected")
                 .doesNotContain("redirect_uri");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("Wallet rejected"));
         verify(store).resolveByKid(session, "kid-state-fallback");
         verify(store).resolveByState(session, "state-fallback");
     }
@@ -263,7 +292,14 @@ class Oid4vpIdentityProviderEndpointTest {
         Response response = endpoint.handlePost(null, null, null, encryptedResponse, null, null);
 
         assertThat(response.getStatus()).isEqualTo(200);
-        assertThat((String) response.getEntity()).contains("redirect_uri").contains("state+does+not+match");
+        assertThat((String) response.getEntity())
+                .contains("redirect_uri")
+                .contains("error=")
+                .doesNotContain("state+does+not+match");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("state does not match"));
     }
 
     @Test
@@ -277,7 +313,14 @@ class Oid4vpIdentityProviderEndpointTest {
         Response response = endpoint.handlePost("state-expected", null, null, encryptedResponse, null, null);
 
         assertThat(response.getStatus()).isEqualTo(200);
-        assertThat((String) response.getEntity()).contains("redirect_uri").contains("missing+the+state+parameter");
+        assertThat((String) response.getEntity())
+                .contains("redirect_uri")
+                .contains("error=")
+                .doesNotContain("missing+the+state+parameter");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("missing the state parameter"));
     }
 
     @Test
@@ -293,7 +336,14 @@ class Oid4vpIdentityProviderEndpointTest {
         Response response = endpoint.handlePost(null, null, null, encryptedResponse, null, null);
 
         assertThat(response.getStatus()).isEqualTo(200);
-        assertThat((String) response.getEntity()).contains("redirect_uri").contains("missing+the+state+parameter");
+        assertThat((String) response.getEntity())
+                .contains("redirect_uri")
+                .contains("error=")
+                .doesNotContain("missing+the+state+parameter");
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.atLeastOnce())
+                .detail(
+                        org.mockito.ArgumentMatchers.eq(org.keycloak.OAuth2Constants.ERROR_DESCRIPTION),
+                        org.mockito.ArgumentMatchers.contains("missing the state parameter"));
     }
 
     @Test
@@ -372,7 +422,7 @@ class Oid4vpIdentityProviderEndpointTest {
 
     @Test
     void completeAuth_withoutRequestHandle_returnsInvalidRequest() {
-        Response response = endpoint.completeAuth(null);
+        Response response = endpoint.completeAuth(null, null);
 
         assertThat(response.getStatus()).isEqualTo(400);
         assertThat((String) response.getEntity()).contains("invalid_request");

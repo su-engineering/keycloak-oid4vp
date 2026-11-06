@@ -301,7 +301,10 @@ class Oid4vpDirectPostServiceTest {
                 .when(currentAuthSession)
                 .removeAuthNote(anyString());
 
-        service.storeAndSignal(storedAuthSession, "handle-1", brokeredIdentityContext, false);
+        Response signal = service.storeAndSignal(storedAuthSession, "handle-1", brokeredIdentityContext, false);
+        String redirect = signal.getEntity().toString();
+        String responseCode = redirect.substring(redirect.indexOf("response_code=") + "response_code=".length())
+                .replaceAll("[^A-Za-z0-9_-].*$", "");
         when(callback.authenticated(any(BrokeredIdentityContext.class))).thenAnswer(invocation -> {
             BrokeredIdentityContext context = invocation.getArgument(0);
             assertThat(context.getAuthenticationSession()).isSameAs(currentAuthSession);
@@ -314,7 +317,11 @@ class Oid4vpDirectPostServiceTest {
             return Response.ok("ok").build();
         });
 
-        Response response = service.completeAuth("handle-1", callback, event);
+        Response wrongCode = service.completeAuth("handle-1", "not-the-code", callback, event);
+        assertThat(wrongCode.getStatus()).as("a wrong response_code is refused").isEqualTo(400);
+        verify(callback, org.mockito.Mockito.never()).authenticated(any(BrokeredIdentityContext.class));
+
+        Response response = service.completeAuth("handle-1", responseCode, callback, event);
 
         assertThat(response.getStatus()).isEqualTo(200);
         verify(context).setAuthenticationSession(currentAuthSession);

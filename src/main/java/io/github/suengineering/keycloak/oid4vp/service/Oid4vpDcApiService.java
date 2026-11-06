@@ -272,8 +272,11 @@ public class Oid4vpDcApiService {
         String vpToken = isoMdoc ? extractIsoVpToken(data, requestContext) : extractVpToken(data, requestContext);
         BrokeredIdentityContext identity =
                 provider.getCallbackProcessor().process(verificationContext, vpToken, null, null);
-        // The nonce is single-use: a verified response cannot be posted a second time.
-        requestObjectStore.removeRequestContext(session, requestContext.state());
+        // The nonce is single-use: of concurrent posts of one response, only the one that removes
+        // the request context completes.
+        if (!requestObjectStore.removeRequestContext(session, requestContext.state())) {
+            throw new FlowMismatchException("session_expired", "This response was already used.");
+        }
         return new DcApiResult(authSession, requestContext, identity, null, null);
     }
 
