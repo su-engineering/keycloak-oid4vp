@@ -18,10 +18,18 @@ package io.github.suengineering.keycloak.oid4vp.domain;
 
 import org.keycloak.utils.StringUtil;
 
-/** Models the OID4VP direct-post response modes used by the verifier. */
+/**
+ * Models the OID4VP response modes used by the verifier.
+ *
+ * <p>The direct-post modes serve the redirect flows (same-device and cross-device). The
+ * {@code dc_api} modes serve the browser Digital Credentials API flow and are derived from the
+ * configured direct-post mode, never configured on their own.
+ */
 public enum Oid4vpResponseMode {
     DIRECT_POST("direct_post"),
-    DIRECT_POST_JWT("direct_post.jwt");
+    DIRECT_POST_JWT("direct_post.jwt"),
+    DC_API("dc_api"),
+    DC_API_JWT("dc_api.jwt");
 
     private final String parameterValue;
 
@@ -34,21 +42,29 @@ public enum Oid4vpResponseMode {
     }
 
     public boolean requiresEncryption() {
-        return this == DIRECT_POST_JWT;
+        return this == DIRECT_POST_JWT || this == DC_API_JWT;
+    }
+
+    public boolean isDcApi() {
+        return this == DC_API || this == DC_API_JWT;
+    }
+
+    /** Returns the Digital Credentials API mode with the same encryption requirement. */
+    public Oid4vpResponseMode forDcApi() {
+        return requiresEncryption() ? DC_API_JWT : DC_API;
     }
 
     public static Oid4vpResponseMode resolve(String rawValue, boolean enforceHaip) {
         return enforceHaip ? DIRECT_POST_JWT : resolve(rawValue);
     }
 
+    /** Resolves a configured redirect-flow response mode; unknown and dc_api values fall back to direct_post. */
     public static Oid4vpResponseMode resolve(String rawValue) {
         if (StringUtil.isBlank(rawValue)) {
             return DIRECT_POST;
         }
-        for (Oid4vpResponseMode mode : values()) {
-            if (mode.parameterValue.equalsIgnoreCase(rawValue)) {
-                return mode;
-            }
+        if (DIRECT_POST_JWT.parameterValue.equalsIgnoreCase(rawValue)) {
+            return DIRECT_POST_JWT;
         }
         return DIRECT_POST;
     }

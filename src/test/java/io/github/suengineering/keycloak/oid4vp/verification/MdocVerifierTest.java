@@ -539,6 +539,71 @@ class MdocVerifierTest {
     }
 
     @Nested
+    class DcApiDeviceAuth {
+
+        private static final String ORIGIN = "https://login.example.com";
+        private final byte[] thumbprint = new byte[] {1, 2, 3, 4, 5, 6, 7, 8};
+
+        @Test
+        void dcApiTranscript_unencrypted_passes() throws Exception {
+            MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+            String token = helper.build(MdocSessionTranscriptBuilder.buildDcApi(ORIGIN, NONCE, null));
+
+            MdocVerificationResult result =
+                    verifier.verifyDcApi(token, List.of(helper.issuerCert), ORIGIN, NONCE, null);
+
+            assertThat(result.claims()).containsEntry("org.iso.18013.5.1/given_name", "John");
+        }
+
+        @Test
+        void dcApiTranscript_withEncryptionKeyThumbprint_passes() throws Exception {
+            MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+            String token = helper.build(MdocSessionTranscriptBuilder.buildDcApi(ORIGIN, NONCE, thumbprint));
+
+            assertThat(verifier.verifyDcApi(token, List.of(helper.issuerCert), ORIGIN, NONCE, thumbprint))
+                    .isNotNull();
+        }
+
+        @Test
+        void dcApiTranscript_fromAnotherOrigin_isRejected() throws Exception {
+            MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+            String token = helper.build(MdocSessionTranscriptBuilder.buildDcApi("https://evil.example", NONCE, null));
+
+            assertThatThrownBy(() -> verifier.verifyDcApi(token, List.of(helper.issuerCert), ORIGIN, NONCE, null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("deviceAuth signature invalid");
+        }
+
+        @Test
+        void dcApiTranscript_reEncryptedForAnotherKey_isRejected() throws Exception {
+            MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+            String token = helper.build(MdocSessionTranscriptBuilder.buildDcApi(ORIGIN, NONCE, null));
+
+            assertThatThrownBy(() -> verifier.verifyDcApi(token, List.of(helper.issuerCert), ORIGIN, NONCE, thumbprint))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        void redirectTranscript_isNotAcceptedForDcApi() throws Exception {
+            MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+            String token = helper.build(MdocSessionTranscriptBuilder.buildOid4vp(ORIGIN, NONCE, RESPONSE_URI, null));
+
+            assertThatThrownBy(() -> verifier.verifyDcApi(token, List.of(helper.issuerCert), ORIGIN, NONCE, null))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        void missingOrigin_isRejected() throws Exception {
+            MdocDeviceResponseTestHelper helper = new MdocDeviceResponseTestHelper();
+            String token = helper.build(MdocSessionTranscriptBuilder.buildDcApi(ORIGIN, NONCE, null));
+
+            assertThatThrownBy(() -> verifier.verifyDcApi(token, List.of(helper.issuerCert), " ", NONCE, null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("requires device authentication");
+        }
+    }
+
+    @Nested
     class DigestVerification {
 
         @Test

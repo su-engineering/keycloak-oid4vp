@@ -72,6 +72,22 @@
                 </div>
             </#if>
 
+            <#if (dcApiEnabled!false)>
+                <div class="openkyc-primary" id="oid4vp-dc-api" hidden>
+                    <button type="button" id="oid4vp-dc-api-button" class="openkyc-wallet-button" hidden>
+                        <span class="openkyc-wallet-button__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+                                <path d="M3 8h18"></path>
+                                <path d="M8 21h8"></path>
+                            </svg>
+                        </span>
+                        <span class="openkyc-wallet-button__text">${msg("oid4vpUseBrowserWallet")}</span>
+                    </button>
+                    <p id="oid4vp-dc-api-status" class="openkyc-dc-api-status" role="status" hidden></p>
+                </div>
+            </#if>
+
             <#if (crossDeviceEnabled!false) && (qrCodeBase64!'')?has_content>
                 <a href="#" id="openkyc-qr-toggle" class="openkyc-qr-toggle" aria-expanded="false" aria-controls="qr-section">
                     ${msg("oid4vpShowQrToggle")}
@@ -151,6 +167,10 @@
                 hidden
             ></div>
             <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-cross-device-status.js"></script>
+        </#if>
+        <#if (dcApiEnabled!false)>
+            <div id="oid4vp-dc-api-config" hidden data-request-url="${dcApiRequestUrl!''}" data-response-url="${dcApiResponseUrl!''}" data-request-handle="${dcApiRequestHandle!''}" data-cancelled-message="${msg('oid4vpDcApiCancelled')}" data-error-message="${msg('oid4vpDcApiFailed')}"></div>
+            <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-dc-api.js"></script>
         </#if>
     </#if>
 </@layout.registrationLayout>

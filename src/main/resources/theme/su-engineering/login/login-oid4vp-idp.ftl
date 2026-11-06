@@ -12,6 +12,7 @@
         </form>
         <#assign showWallet = (sameDeviceEnabled!false) && (sameDeviceWalletUrl!'')?has_content>
         <#assign showQr = (crossDeviceEnabled!false) && (qrCodeBase64!'')?has_content>
+        <#assign showDcApi = (dcApiEnabled!false)>
         <div class="su-wallet-grid<#if !showQr> su-wallet-grid--single</#if>">
             <section class="su-intro" aria-labelledby="su-page-title">
                 <h1 id="su-page-title">${msg("suWalletTitle")}</h1>
@@ -27,7 +28,17 @@
                     <h2>${msg("suReviewTitle")}</h2>
                     <p>${msg("suReviewDescription")}</p>
                 </div>
-                <#if !showWallet && !showQr>
+                <#if showDcApi>
+                    <div id="oid4vp-dc-api" class="su-dc-api" hidden>
+                        <button type="button" id="oid4vp-dc-api-button" class="su-button su-button--secondary" hidden>
+                            <span>${msg("suUseBrowserWallet")}</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12h15M13 5l7 7-7 7"/></svg>
+                        </button>
+                        <p class="su-hint">${msg("suBrowserWalletHint")}</p>
+                        <p id="oid4vp-dc-api-status" class="su-alert" role="status" hidden></p>
+                    </div>
+                </#if>
+                <#if !showWallet && !showQr && !showDcApi>
                     <div class="su-alert" role="alert">${msg("suUnavailable")}</div>
                 </#if>
             </section>
@@ -71,6 +82,16 @@
                  data-poll-interval-ms="${(crossDevicePollIntervalMs!2000)?c}"></div>
             <#-- Shared extension resource: keep completion behavior identical across themes. -->
             <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-cross-device-status.js"></script>
+        </#if>
+        <#if showDcApi>
+            <div id="oid4vp-dc-api-config" hidden
+                 data-request-url="${dcApiRequestUrl!''}"
+                 data-response-url="${dcApiResponseUrl!''}"
+                 data-request-handle="${dcApiRequestHandle!''}"
+                 data-cancelled-message="${msg('suBrowserWalletCancelled')}"
+                 data-error-message="${msg('suBrowserWalletFailed')}"></div>
+            <#-- Shared extension resource: same Digital Credentials API behavior across themes. -->
+            <script nonce="${cspNonce!}" src="${url.resourcesPath}/js/oid4vp-dc-api.js"></script>
         </#if>
     </#if>
 </@layout.registrationLayout>

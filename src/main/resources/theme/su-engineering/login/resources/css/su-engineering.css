@@ -47,6 +47,13 @@
 .su-button { min-height: 52px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; background: var(--su-fire); border: 1px solid var(--su-fire); border-radius: 3px; text-decoration: none; font-weight: 600; }
 .su-button:hover { background: #ed4000; border-color: #ed4000; }
 .su-button svg { flex-shrink: 0; }
+button.su-button { width: 100%; font: inherit; font-weight: 600; color: inherit; text-align: start; cursor: pointer; }
+button.su-button:disabled { opacity: .6; cursor: progress; }
+.su-button--secondary { background: transparent; border-color: var(--su-border); }
+.su-button--secondary:hover { background: transparent; border-color: var(--su-fire); }
+.su-dc-api { margin-top: 24px; }
+.su-dc-api[hidden], .su-button[hidden], .su-dc-api .su-alert[hidden] { display: none; }
+.su-dc-api .su-alert { margin-top: 12px; }
 .su-hint { margin: 12px 0 0; color: var(--su-muted); font-size: 13px; }
 .su-review { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--su-border); }
 .su-review h2, .su-qr-panel h2 { margin: 0 0 12px; font: 400 17px/1.5 var(--su-mono); letter-spacing: -.5px; }

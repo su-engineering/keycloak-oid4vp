@@ -299,6 +299,10 @@
             gap: var(--space-3);
         }
 
+        .openkyc-primary[hidden], .openkyc-wallet-button[hidden], .openkyc-dc-api-status[hidden] { display: none; }
+        button.openkyc-wallet-button { font: inherit; text-align: left; cursor: pointer; }
+        button.openkyc-wallet-button:disabled { opacity: 0.6; cursor: progress; transform: none; }
+        .openkyc-dc-api-status { margin: 0; font: 400 13px/1.5 'Inter', sans-serif; color: var(--color-mist); }
         .openkyc-wallet-button {
             display: flex;
             align-items: center;

@@ -130,7 +130,7 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
         return redirectFlowService;
     }
 
-    Oid4vpCallbackProcessor getCallbackProcessor() {
+    public Oid4vpCallbackProcessor getCallbackProcessor() {
         return callbackProcessor;
     }
 
@@ -147,7 +147,10 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
             RedirectFlowData redirectFlowData =
                     buildRedirectFlowData(request, authSession, loginContext, sameDeviceEnabled, crossDeviceEnabled);
 
-            return buildLoginFormResponse(authSession, redirectFlowData, sameDeviceEnabled, crossDeviceEnabled);
+            String dcApiRequestHandle = createDcApiFlow(loginContext);
+
+            return buildLoginFormResponse(
+                    authSession, redirectFlowData, sameDeviceEnabled, crossDeviceEnabled, dcApiRequestHandle);
 
         } catch (Exception e) {
             LOG.errorf(e, "Failed to initiate OID4VP login: %s", e.getMessage());
@@ -373,24 +376,56 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
         return new FlowEntry(requestHandle, formState, formActionUrl, walletUrl);
     }
 
+    /**
+     * Registers the flow handle for the Digital Credentials API button, or returns {@code null} when
+     * the flow is off. The ID token subject mode needs a SIOP response the browser API cannot carry.
+     */
+    private String createDcApiFlow(LoginContext loginContext) {
+        if (!getConfig().isDcApiEnabled()) {
+            return null;
+        }
+        if (getConfig().isUseIdTokenSubject()) {
+            LOG.warnf(
+                    "OID4VP IdP '%s': the Digital Credentials API flow is not offered while the ID token subject is used",
+                    getConfig().getAlias());
+            return null;
+        }
+        String requestHandle = UUID.randomUUID().toString();
+        requestObjectStore.storeFlowHandle(
+                session,
+                requestHandle,
+                new Oid4vpRequestObjectStore.FlowContextEntry(
+                        loginContext.rootSessionId(),
+                        loginContext.flowTabId(),
+                        loginContext.effectiveClientId(),
+                        null,
+                        Oid4vpConstants.FLOW_DC_API));
+        return requestHandle;
+    }
+
     private String computeEffectiveClientId(String clientId) {
         Oid4vpClientIdScheme clientIdScheme = getConfig().getResolvedClientIdScheme();
         return clientIdScheme.computeClientId(clientId, getConfig().getX509CertificatePem());
     }
 
     private String buildCrossDeviceStatusUrl() {
+        return buildEndpointUrl("/cross-device/status");
+    }
+
+    private String buildEndpointUrl(String path) {
         return Oid4vpConstants.buildEndpointBaseUrl(
                         session.getContext().getUri().getBaseUri(),
                         session.getContext().getRealm().getName(),
                         getConfig().getAlias())
-                + "/cross-device/status";
+                + path;
     }
 
     private Response buildLoginFormResponse(
             AuthenticationSessionModel authSession,
             RedirectFlowData redirectFlowData,
             boolean sameDeviceEnabled,
-            boolean crossDeviceEnabled) {
+            boolean crossDeviceEnabled,
+            String dcApiRequestHandle) {
 
         FlowEntry sameDeviceFlow = redirectFlowData.sameDeviceFlow();
         FlowEntry crossDeviceFlow = redirectFlowData.crossDeviceFlow();
@@ -420,6 +455,12 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                 .setAttribute("qrCodeBase64", redirectFlowData.qrCodeBase64())
                 .setAttribute("crossDeviceStatusUrl", crossDeviceEnabled ? buildCrossDeviceStatusUrl() : null)
                 .setAttribute("crossDevicePollIntervalMs", getConfig().getCrossDevicePollIntervalMs())
+                .setAttribute("dcApiEnabled", dcApiRequestHandle != null)
+                .setAttribute("dcApiRequestHandle", dcApiRequestHandle)
+                .setAttribute(
+                        "dcApiRequestUrl", dcApiRequestHandle != null ? buildEndpointUrl("/dc-api/request") : null)
+                .setAttribute(
+                        "dcApiResponseUrl", dcApiRequestHandle != null ? buildEndpointUrl("/dc-api/response") : null)
                 .createForm("login-oid4vp-idp.ftl");
     }
 

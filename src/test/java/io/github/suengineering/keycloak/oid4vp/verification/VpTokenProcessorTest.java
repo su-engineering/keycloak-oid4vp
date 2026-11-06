@@ -101,6 +101,31 @@ class VpTokenProcessorTest {
     }
 
     @Test
+    void dcApi_sdJwtMustBeBoundToTheOriginAudience() throws Exception {
+        String credJwt = buildSdJwt(Map.of(
+                "iss",
+                "https://issuer.example",
+                "vct",
+                "IdentityCredential",
+                "sub",
+                "user1",
+                "cnf",
+                Map.of("jwk", holderKey.toPublicJWK().toJSONObject())));
+        String origin = "https://login.example.com";
+
+        String boundToOrigin = buildSdJwtVpWithKbJwt(credJwt, "origin:" + origin, "nonce");
+        VpTokenResult result = processor.process(
+                VpTokenProcessor.Request.forDcApi(boundToOrigin, origin, "nonce", null, query("IdentityCredential")));
+        assertThat(result.getPrimaryCredential().claims()).containsEntry("sub", "user1");
+
+        // A presentation made for the client ID (a redirect flow) is not accepted here.
+        String boundToClientId = buildSdJwtVpWithKbJwt(credJwt, "client-id", "nonce");
+        assertThatThrownBy(() -> processor.process(VpTokenProcessor.Request.forDcApi(
+                        boundToClientId, origin, "nonce", null, query("IdentityCredential"))))
+                .isInstanceOf(IdentityBrokerException.class);
+    }
+
+    @Test
     void multipleCredentialTypesKeepAllClaimsInRequestOrder() throws Exception {
         String membership = presentation("Membership", "Alice", "nonce");
         String license = presentation("License", "Bob", "nonce");

@@ -146,6 +146,17 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .defaultValue("true")
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.DC_API_ENABLED)
+                .label("Enable Digital Credentials API")
+                .helpText("Offer a wallet in this browser through the W3C Digital Credentials API "
+                        + "(OID4VP 1.0 Appendix A). The button only appears in browsers that support the API. "
+                        + "Requests are signed when the client ID scheme is certificate-bound and unsigned "
+                        + "otherwise; responses are encrypted (dc_api.jwt) when the response mode is "
+                        + "direct_post.jwt or HAIP is enforced. Not offered when the ID token subject is used.")
+                .type(ProviderConfigProperty.BOOLEAN_TYPE)
+                .defaultValue("false")
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.WALLET_SCHEME)
                 .label("Wallet URL Scheme")
                 .helpText("Custom URL scheme for wallet apps (e.g., openid4vp://, haip://).")

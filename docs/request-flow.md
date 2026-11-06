@@ -209,6 +209,32 @@ The page navigates to `redirect_uri`, triggering the completion flow above. Resp
 
 Each poll is an ordinary request that finishes within its own Keycloak session and transaction. No connection, thread, or Keycloak session is held open between polls, and any node with access to the shared single-use store can answer.
 
+## Digital Credentials API Flow
+
+When `dcApiEnabled` is on, `performLogin` registers one more flow handle with flow `dc_api`. The wallet never contacts Keycloak; the login page calls the browser API and relays the result, so both calls below carry the browser's auth-session cookie and are rejected for any other browser.
+
+```
+POST /dc-api/request   request_handle=...
+Oid4vpIdentityProviderEndpoint.createDcApiRequest
+    → Oid4vpDcApiService.createRequest
+        → fresh state, nonce, optional encryption key, origin from the Keycloak front-end URL
+        → Oid4vpRedirectFlowService.buildDcApiRequest  (signed or unsigned, dc_api or dc_api.jwt)
+    ← {"state": "...", "protocol": "openid4vp-v1-...", "data": {...}}
+
+navigator.credentials.get({digital: {requests: [{protocol, data}]}})
+
+POST /dc-api/response  request_handle=..., state=..., response=<credential.data as JSON>
+Oid4vpIdentityProviderEndpoint.handleDcApiResponse
+    → Oid4vpDcApiService.handleResponse
+        → decrypts {"response": JWE} for dc_api.jwt, or reads {"vp_token": {...}}
+        → Oid4vpCallbackProcessor.process  (VpTokenProcessor.Request.forDcApi: aud origin:<origin>, OpenID4VPDCAPIHandover)
+        → removes the request context so the nonce cannot be reused
+    → Oid4vpDirectPostService.storeAndSignal(..., isCrossDevice=false)
+    ← {"redirect_uri": "/complete-auth?request_handle=..."}
+```
+
+The page then navigates to `redirect_uri` and completes as in the same-device flow. A wallet error (`{"error": ...}`) or a failed verification returns the usual `redirect_uri` to the error page. If the user closes the browser dialog, the page shows a message and the button can be used again; each click creates a new request.
+
 ## Error Handling
 
 Errors can occur at multiple points:
@@ -232,11 +258,12 @@ Errors can occur at multiple points:
 | `SdJwtVerifier` | SD-JWT signature + KB-JWT verification, disclosure resolution, verification-order policy (`x5c` first, metadata fallback outside HAIP) |
 | `JwtVcIssuerMetadataResolver` | JWT VC issuer metadata discovery (`/.well-known/jwt-vc-issuer`), `jwks`/`jwks_uri` lookup, and bounded caching by response TTL and JWK `exp` |
 | `MdocVerifier` | mDoc issuer/device auth verification, digest/validity checks, claim extraction |
-| `MdocSessionTranscriptBuilder` | Builds OID4VP 1.0 and ISO 18013-7 SessionTranscript structures |
+| `MdocSessionTranscriptBuilder` | Builds OID4VP 1.0 (redirect and Digital Credentials API) and ISO 18013-7 SessionTranscript structures |
 | `StatusListVerifier` | Token Status List fetching, caching, revocation bit checking |
 | `TrustListProvider` | ETSI trust list fetching, certificate extraction, caching, optional JWT signature verification |
 | `X5cChainValidator` | x5c certificate chain validation (shared by SD-JWT, mDoc, status list, trust list) |
-| `Oid4vpDirectPostService` | Deferred auth storage for both flows, session restoration at `/complete-auth` |
+| `Oid4vpDcApiService` | Digital Credentials API request creation, browser-session checks, response decryption and verification |
+| `Oid4vpDirectPostService` | Deferred auth storage for all flows, session restoration at `/complete-auth` |
 | `Oid4vpRequestObjectStore` | Transient storage for stable flow handles, per-request contexts, state→request mappings, and KID→state mappings. Flow-handle removal invalidates all sibling request contexts without needing explicit per-flow state tracking |
 | `Oid4vpAuthSessionResolver` | Auth session lookup from request object store (state→handle→session, rootSessionId→tabId) |
 | `Oid4vpResponseDecryptor` | JWE decryption for direct_post.jwt responses |

@@ -20,6 +20,7 @@ import static io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants.*;
 
 import io.github.suengineering.keycloak.oid4vp.domain.DecryptedResponse;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpJwk;
+import io.github.suengineering.keycloak.oid4vp.service.Oid4vpDcApiService;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpDirectPostService;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpEndpointResponseFactory;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpRequestObjectService;
@@ -64,6 +65,8 @@ import org.keycloak.utils.StringUtil;
  *       authorization request object to the wallet
  *   <li>{@code GET /cross-device/status} — short JSON status check polled by the cross-device login page
  *   <li>{@code GET /complete-auth} — finalizes authentication after the wallet's response is processed
+ *   <li>{@code POST /dc-api/request} and {@code POST /dc-api/response} — the login page's calls for
+ *       the Digital Credentials API flow (OID4VP 1.0 Appendix A)
  * </ul>
  *
  * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#section-5">OID4VP 1.0 §5 — Authorization Request</a>
@@ -87,6 +90,7 @@ public class Oid4vpIdentityProviderEndpoint {
     private final Oid4vpResponseDecryptor responseDecryptor;
     private final Oid4vpDirectPostService directPostService;
     private final Oid4vpRequestObjectService requestObjectService;
+    private final Oid4vpDcApiService dcApiService;
     private final Oid4vpEndpointResponseFactory responseFactory;
 
     public Oid4vpIdentityProviderEndpoint(
@@ -108,6 +112,8 @@ public class Oid4vpIdentityProviderEndpoint {
         this.directPostService = new Oid4vpDirectPostService(session, realm, provider.getConfig(), requestObjectStore);
         this.requestObjectService = new Oid4vpRequestObjectService(
                 session, provider, requestObjectStore, authSessionResolver, responseFactory);
+        this.dcApiService =
+                new Oid4vpDcApiService(session, provider, requestObjectStore, authSessionResolver, responseDecryptor);
     }
 
     /**
@@ -410,6 +416,64 @@ public class Oid4vpIdentityProviderEndpoint {
                 ? Map.of("status", "pending")
                 : Map.of("status", "complete", OAuth2Constants.REDIRECT_URI, completeAuthUrl);
         return noStore(Response.ok(body, MediaType.APPLICATION_JSON_TYPE)).build();
+    }
+
+    /**
+     * Creates a Digital Credentials API request for the login page to pass to
+     * {@code navigator.credentials.get()}. Answers {@code {state, protocol, data}}.
+     */
+    @POST
+    @Path("/dc-api/request")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response createDcApiRequest(@FormParam(PARAM_REQUEST_HANDLE) String requestHandle) {
+        if (!provider.getConfig().isDcApiEnabled()) {
+            return responseFactory.jsonErrorResponse(Response.Status.NOT_FOUND, "not_found", null);
+        }
+        try {
+            Oid4vpDcApiService.DcApiRequest request = dcApiService.createRequest(requestHandle);
+            return noStore(Response.ok(Oid4vpDcApiService.toPageJson(request), MediaType.APPLICATION_JSON_TYPE))
+                    .build();
+        } catch (Oid4vpDcApiService.FlowMismatchException e) {
+            return responseFactory.jsonErrorResponse(Response.Status.BAD_REQUEST, e.error(), e.getMessage());
+        } catch (IdentityBrokerException | IllegalArgumentException e) {
+            return responseFactory.jsonErrorResponse(Response.Status.BAD_REQUEST, "invalid_request", e.getMessage());
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to create Digital Credentials API request: %s", e.getMessage());
+            return responseFactory.jsonErrorResponse(Response.Status.INTERNAL_SERVER_ERROR, "server_error", null);
+        }
+    }
+
+    /**
+     * Receives the {@code data} of the credential returned by {@code navigator.credentials.get()}.
+     * Answers {@code {redirect_uri}}: the completion URL on success, the error page otherwise.
+     */
+    @POST
+    @Path("/dc-api/response")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response handleDcApiResponse(
+            @FormParam(PARAM_REQUEST_HANDLE) String requestHandle,
+            @FormParam(OAuth2Constants.STATE) String state,
+            @FormParam(RESPONSE) String responseData) {
+        if (!provider.getConfig().isDcApiEnabled()) {
+            return responseFactory.jsonErrorResponse(Response.Status.NOT_FOUND, "not_found", null);
+        }
+        try {
+            Oid4vpDcApiService.DcApiResult result = dcApiService.handleResponse(requestHandle, state, responseData);
+            if (result.walletError() != null) {
+                return handleError(result.walletError(), result.walletErrorDescription(), state);
+            }
+            return directPostService.storeAndSignal(result.authSession(), requestHandle, result.identity(), false);
+        } catch (Oid4vpDcApiService.FlowMismatchException e) {
+            event.event(EventType.LOGIN_ERROR).error(Errors.SESSION_EXPIRED);
+            return responseFactory.jsonErrorResponse(Response.Status.BAD_REQUEST, e.error(), e.getMessage());
+        } catch (IdentityBrokerException e) {
+            return handleError("identity_provider_error", e.getMessage(), state);
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to process Digital Credentials API response: %s", e.getMessage());
+            return responseFactory.jsonErrorResponse(Response.Status.INTERNAL_SERVER_ERROR, "server_error", null);
+        }
     }
 
     private static Response.ResponseBuilder noStore(Response.ResponseBuilder builder) {

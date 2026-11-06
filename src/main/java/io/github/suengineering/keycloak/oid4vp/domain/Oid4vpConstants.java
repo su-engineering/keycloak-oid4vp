@@ -102,6 +102,12 @@ public final class Oid4vpConstants {
     public static final String RESPONSE_MODE_DIRECT_POST = "direct_post";
     public static final String RESPONSE_MODE_DIRECT_POST_JWT = "direct_post.jwt";
 
+    // Digital Credentials API (OID4VP 1.0 Appendix A)
+    public static final String DC_API_PROTOCOL_UNSIGNED = "openid4vp-v1-unsigned";
+    public static final String DC_API_PROTOCOL_SIGNED = "openid4vp-v1-signed";
+    public static final String EXPECTED_ORIGINS = "expected_origins";
+    public static final String ORIGIN_AUDIENCE_PREFIX = "origin:";
+
     // Response type values
     public static final String RESPONSE_TYPE_VP_TOKEN_ID_TOKEN = "vp_token id_token";
 
@@ -115,6 +121,7 @@ public final class Oid4vpConstants {
     // Flow types
     public static final String FLOW_SAME_DEVICE = "same_device";
     public static final String FLOW_CROSS_DEVICE = "cross_device";
+    public static final String FLOW_DC_API = "dc_api";
 
     // Query/form parameter names
     public static final String PARAM_TAB_ID = "tab_id";
