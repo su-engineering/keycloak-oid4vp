@@ -52,6 +52,7 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.broker.provider.AbstractIdentityProvider;
 import org.keycloak.broker.provider.AuthenticationRequest;
+import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityBrokerException;
 import org.keycloak.common.util.PemUtils;
 import org.keycloak.events.EventBuilder;
@@ -130,7 +131,8 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
                                         config.getVicalUrl(),
                                         parseTrustListSigningCerts(config.getVicalSigningCertPem()),
                                         config.getMdocCertificateProfile(),
-                                        config.getCertificateRevocationCheck()))
+                                        config.getCertificateRevocationCheck(),
+                                        config.isX5cIssuerBinding()))
                         .withIssuerFilter(config::isIssuerAllowed));
 
         RealmModel realm = session.getContext().getRealm();
@@ -179,6 +181,31 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
     public Response retrieveToken(
             KeycloakSession session, FederatedIdentityModel identity, UserSessionModel userSession, UserModel user) {
         return null;
+    }
+
+    @Override
+    public void importNewUser(
+            KeycloakSession session, RealmModel realm, UserModel user, BrokeredIdentityContext context) {
+        super.importNewUser(session, realm, user, context);
+        recordIssuerScope(user, context);
+    }
+
+    @Override
+    public void updateBrokeredUser(
+            KeycloakSession session, RealmModel realm, UserModel user, BrokeredIdentityContext context) {
+        super.updateBrokeredUser(session, realm, user, context);
+        recordIssuerScope(user, context);
+    }
+
+    /** Records which issuer the account logs in with, so identityKeyScope=issuer can migrate it safely. */
+    private void recordIssuerScope(UserModel user, BrokeredIdentityContext context) {
+        Object hash = context.getContextData().get(Oid4vpCallbackProcessor.ISSUER_SCOPE_HASH);
+        if (hash instanceof String scopeHash && !getConfig().isTransientUsersEnabled()) {
+            user.setSingleAttribute(
+                    Oid4vpCallbackProcessor.ISSUER_SCOPE_ATTRIBUTE_PREFIX
+                            + getConfig().getAlias(),
+                    scopeHash);
+        }
     }
 
     @Override

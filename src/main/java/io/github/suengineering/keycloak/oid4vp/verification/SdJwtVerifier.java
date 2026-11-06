@@ -68,6 +68,17 @@ public class SdJwtVerifier {
     }
 
     private CertificateRevocationChecker revocationChecker = CertificateRevocationChecker.DISABLED;
+    private boolean requireIssuerBinding = true;
+
+    /**
+     * Whether an x5c leaf (or directly trusted certificate) must name the {@code iss} value. Turning
+     * it off lets any certificate anchored in the trust list sign for any issuer; it exists only for
+     * issuers whose certificates do not carry their identifier yet.
+     */
+    public SdJwtVerifier withIssuerCertificateBinding(boolean required) {
+        this.requireIssuerBinding = required;
+        return this;
+    }
 
     /** Checks issuer certificate chains for revocation (CRL/OCSP) with {@code checker}. */
     public SdJwtVerifier withRevocationChecker(CertificateRevocationChecker checker) {
@@ -227,7 +238,7 @@ public class SdJwtVerifier {
         LOG.debug("Using trusted certificate keys directly for signature verification");
         List<SignatureVerifierContext> verifiers = new ArrayList<>();
         for (X509Certificate cert : X5cChainValidator.currentlyValid(trustedCertificates)) {
-            if (IssuerCertificateBinding.names(cert, issuer)) {
+            if (!requireIssuerBinding || IssuerCertificateBinding.names(cert, issuer)) {
                 verifiers.add(toVerifierContext(cert.getPublicKey()));
             }
         }
@@ -256,7 +267,7 @@ public class SdJwtVerifier {
             X5cChainValidator.AnchoredChain anchored = X5cChainValidator.anchorChain(chain, trustedCertificates);
             // SD-JWT VC: the issuer certificate must name the iss value (SAN URI or DNS name).
             String issuer = extractIssuer(sdJwtVP);
-            if (!IssuerCertificateBinding.names(chain.get(0), issuer)) {
+            if (requireIssuerBinding && !IssuerCertificateBinding.names(chain.get(0), issuer)) {
                 throw new IllegalStateException("x5c leaf certificate does not name issuer " + issuer);
             }
             revocationChecker.check(anchored);

@@ -110,6 +110,10 @@ public class Oid4vpDirectPostService {
         if (legacyKey instanceof String key) {
             authSession.setAuthNote(legacyNote(requestHandle), key);
         }
+        Object scopeHash = context.getContextData().get(Oid4vpCallbackProcessor.ISSUER_SCOPE_HASH);
+        if (scopeHash instanceof String hash) {
+            authSession.setAuthNote(scopeNote(requestHandle), hash);
+        }
         SerializedBrokeredIdentityContext serialized = SerializedBrokeredIdentityContext.serialize(context);
         // One note per flow handle: a response posted to another handle of the same page cannot replace it.
         serialized.saveToAuthenticationSession(authSession, identityNote(requestHandle));
@@ -172,17 +176,23 @@ public class Oid4vpDirectPostService {
      * identityKeyScope=issuer migration: when no account is linked under the issuer-scoped key but
      * one is linked under the subject-only key, move that link so the user keeps their account.
      */
-    private void moveLegacyLink(BrokeredIdentityContext context, String legacyKey) {
-        moveLegacyLink(session, realm, config.getAlias(), context.getId(), context.getUsername(), legacyKey);
+    static String scopeNote(String requestHandle) {
+        return "OID4VP_ISSUER_SCOPE:" + requestHandle;
     }
 
+    /**
+     * identityKeyScope=issuer migration. The link is moved only when the account recorded the same
+     * issuer scope at an earlier login: a subject-only key cannot tell issuers apart, so moving it
+     * for any presenter would hand the account to whoever first shows a colliding identifier.
+     */
     static boolean moveLegacyLink(
             KeycloakSession session,
             RealmModel realm,
             String alias,
             String scopedKey,
             String username,
-            String legacyKey) {
+            String legacyKey,
+            String scopeHash) {
         var users = session.users();
         if (users.getUserByFederatedIdentity(
                         realm, new org.keycloak.models.FederatedIdentityModel(alias, scopedKey, username))
@@ -192,6 +202,17 @@ public class Oid4vpDirectPostService {
         var user = users.getUserByFederatedIdentity(
                 realm, new org.keycloak.models.FederatedIdentityModel(alias, legacyKey, username));
         if (user == null) {
+            return false;
+        }
+        String recorded = user.getFirstAttribute(Oid4vpCallbackProcessor.ISSUER_SCOPE_ATTRIBUTE_PREFIX + alias);
+        if (recorded == null
+                || !java.security.MessageDigest.isEqual(
+                        recorded.getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                        scopeHash.getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
+            LOG.warnf(
+                    "OID4VP IdP '%s': user %s is linked under the subject-only key without a matching recorded issuer; "
+                            + "the link is not moved automatically",
+                    alias, user.getId());
             return false;
         }
         users.removeFederatedIdentity(realm, user, alias);
@@ -324,9 +345,16 @@ public class Oid4vpDirectPostService {
         storedAuthSession.removeAuthNote(identityNote(requestHandle));
 
         String legacyKey = storedAuthSession.getAuthNote(legacyNote(requestHandle));
+        String scopeHash = storedAuthSession.getAuthNote(scopeNote(requestHandle));
         storedAuthSession.removeAuthNote(legacyNote(requestHandle));
-        if (legacyKey != null) {
-            moveLegacyLink(context, legacyKey);
+        storedAuthSession.removeAuthNote(scopeNote(requestHandle));
+        if (scopeHash != null) {
+            // Restored for importNewUser / updateBrokeredUser, which record it on the user.
+            context.getContextData().put(Oid4vpCallbackProcessor.ISSUER_SCOPE_HASH, scopeHash);
+        }
+        if (legacyKey != null && scopeHash != null) {
+            moveLegacyLink(
+                    session, realm, config.getAlias(), context.getId(), context.getUsername(), legacyKey, scopeHash);
         }
 
         event.event(EventType.LOGIN);

@@ -322,6 +322,16 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .type(ProviderConfigProperty.TEXT_TYPE)
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.X5C_ISSUER_BINDING)
+                .label("Require Issuer Name in SD-JWT Certificate")
+                .helpText("SD-JWT VC requires the issuer certificate to name the iss value (subjectAltName URI, or "
+                        + "the iss host as dNSName). Keep this on. Turning it off lets any certificate anchored in the "
+                        + "trust list sign credentials for any issuer; use it only temporarily for issuers whose "
+                        + "certificates do not carry their identifier yet, together with an issuer allowlist.")
+                .type(ProviderConfigProperty.BOOLEAN_TYPE)
+                .defaultValue("true")
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.CERTIFICATE_REVOCATION_CHECK)
                 .label("Issuer Certificate Revocation Check")
                 .helpText(

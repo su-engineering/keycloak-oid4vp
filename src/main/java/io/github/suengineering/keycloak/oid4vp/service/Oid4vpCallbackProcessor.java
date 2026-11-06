@@ -54,6 +54,12 @@ public class Oid4vpCallbackProcessor {
     /** Context data key holding the subject-only identity key when issuer scoping produced another one. */
     public static final String LEGACY_IDENTITY_KEY = "oid4vp.legacyIdentityKey";
 
+    /** Context data key with a hash of the credential issuer scope, recorded on the user at login. */
+    public static final String ISSUER_SCOPE_HASH = "oid4vp.issuerScopeHash";
+
+    /** User attribute prefix (followed by the IdP alias) holding the recorded issuer scope hash. */
+    public static final String ISSUER_SCOPE_ATTRIBUTE_PREFIX = "oid4vp.issuerScope.";
+
     private final IdentityProviderModel idpModel;
     private final Oid4vpConfigProvider configProvider;
     private final UserAuthenticationIdentityProvider<?> provider;
@@ -169,6 +175,9 @@ public class Oid4vpCallbackProcessor {
         }
 
         BrokeredIdentityContext context = new BrokeredIdentityContext(identityKey, idpModel);
+        if (!configProvider.isTransientUsersEnabled() && primary.issuerScopeHash() != null) {
+            context.getContextData().put(ISSUER_SCOPE_HASH, primary.issuerScopeHash());
+        }
         if (legacyIdentityKey != null) {
             // Lets completion move an account linked under the subject-only key to the scoped key.
             context.getContextData().put(LEGACY_IDENTITY_KEY, legacyIdentityKey);

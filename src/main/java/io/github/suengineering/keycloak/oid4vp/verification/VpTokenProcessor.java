@@ -92,7 +92,8 @@ public class VpTokenProcessor {
             String vicalUrl,
             List<X509Certificate> vicalSigningCerts,
             MdocCertificateProfile mdocCertificateProfile,
-            CertificateRevocationChecker.Mode certificateRevocationCheck) {}
+            CertificateRevocationChecker.Mode certificateRevocationCheck,
+            boolean x5cIssuerBinding) {}
 
     public record Request(
             String vpToken,
@@ -163,7 +164,9 @@ public class VpTokenProcessor {
                 config.strictX5cVerification());
         CertificateRevocationChecker revocationChecker =
                 new CertificateRevocationChecker(config.session(), config.certificateRevocationCheck());
-        this.sdJwtVerifier.withRevocationChecker(revocationChecker);
+        this.sdJwtVerifier
+                .withRevocationChecker(revocationChecker)
+                .withIssuerCertificateBinding(config.x5cIssuerBinding());
         this.mdocVerifier = new MdocVerifier(config.mdocCertificateProfile()).withRevocationChecker(revocationChecker);
         this.vicalProvider = StringUtil.isBlank(config.vicalUrl())
                 ? null
