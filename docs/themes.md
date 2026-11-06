@@ -24,7 +24,7 @@ This is a fragment to merge into your realm configuration. Do not overwrite an e
 
 ## Screenshots
 
-These are actual Keycloak 26.5.5 pages from the disposable local demo, using the realm display name **Wallet demo**. All data and QR sessions are synthetic and disposable.
+These pages were captured from the disposable local demo on an earlier Keycloak version (26.5.5), using the realm display name **Wallet demo**. All data and QR sessions are synthetic and disposable.
 
 ### Wallet login
 

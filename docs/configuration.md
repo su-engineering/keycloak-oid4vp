@@ -6,7 +6,7 @@ The extension is configured as a Keycloak identity provider. All settings are st
 
 1. Open the Keycloak Admin Console.
 2. Go to **Identity Providers**.
-3. Select **OID4VP**.
+3. Select **OID4VP (Wallet Login)**.
 4. Configure the provider settings.
 
 If you want transient wallet logins, Keycloak must be started with the `transient-users` feature enabled. Then enable the IdP's built-in **Do not store users** option in Keycloak.
@@ -61,8 +61,18 @@ Use **Identity providers → oid4vp → Settings → DCQL Query (JSON)** to edit
 | `userMappingClaim` | Claim from an SD-JWT credential used as the unique user identifier. Not required when `useIdTokenSubject` is enabled. Ignored when OID4VP transient users are enabled. | `sub` |
 | `userMappingClaimMdoc` | Claim from an mDoc credential used as the unique user identifier. Falls back to `userMappingClaim`. Ignored when OID4VP transient users are enabled. | *(falls back)* |
 | `useIdTokenSubject` | When HAIP is disabled, requests an additional self-issued `id_token` and uses its subject as the user identifier. The VP token remains required for credential attributes. Ignored when HAIP is enabled. | `false` |
+| `identityKeyScope` | `subject` matches users by the identifier claim alone. `issuer` also covers who issued the credential. See [Identity key scope](#identity-key-scope). | `subject` |
 | `doNotStoreUsers` | Native Keycloak IdP setting. When enabled, OID4VP switches to transient per-login identities, ignores configured identifying claims, and relies on Keycloak transient users. Requires the Keycloak `transient-users` feature to be enabled. | `false` |
-| `clockSkewSeconds` | Allowed clock skew for ID token time checks. | `60` |
+
+`clockSkewSeconds` (see [Trust and Verification](#trust-and-verification)) also applies to the ID token time checks.
+
+#### Identity key scope
+
+Keycloak links a wallet user to an account through an identity key derived from the identifier claim. With `identityKeyScope=subject` the key is the identifier alone (case-insensitive), so the same value from any issuer the identity provider trusts reaches the same account, and SD-JWT and mDoc credentials of one person can share an account.
+
+Use `issuer` when the trust list or VICAL holds issuers whose identifiers can collide, for example document numbers from several authorities. The key then also covers the SD-JWT `iss`, or for mDoc the docType and the issuer of the document signer certificate (the IACA). The same person presenting credentials from two issuers gets two accounts.
+
+Switching from `subject` to `issuer` changes the keys of existing users. Every login records a hash of the credential's issuer on the user (attribute `oid4vp.issuerScope.<alias>`). After the switch, an account linked under the old key is moved to the new key on the next login only when the presenting credential comes from that recorded issuer. Accounts without a record, or presented from another issuer, are not moved; such a login continues as a first login. To migrate existing users, run this version with `subject` until your users have logged in once, then switch.
 
 ### Transient Login Mode
 
@@ -88,17 +98,20 @@ This mode is intended for credentials that do not carry a stable account identif
 | `sameDeviceEnabled` | Enables same-device wallet login. | `true` |
 | `crossDeviceEnabled` | Enables cross-device QR-code wallet login. | `true` |
 | `dcApiEnabled` | Offers a wallet in the same browser through the W3C Digital Credentials API. See [Digital Credentials API](#digital-credentials-api). | `false` |
+| `dcApiOrigin` | Origin that serves the login page, for example `https://login.example.com`. Defaults to the realm Frontend URL. Without either, the Digital Credentials API flow is not offered. See [Digital Credentials API](#digital-credentials-api). | *(realm Frontend URL)* |
 | `dcApiIsoMdocEnabled` | Also offers ISO/IEC 18013-7 Annex C (`org-iso-mdoc`) in that flow when the query is mdoc only. | `true` |
 | `walletScheme` | URI scheme used to invoke the wallet app. | `openid4vp://` |
 | `responseMode` | Wallet callback response mode: `direct_post` or `direct_post.jwt`. | `direct_post` |
+
+Same-device and Digital Credentials API logins finish at a completion URL that carries a one-time `response_code` (OID4VP 1.0 section 13.3). Keycloak completes the login only when the code matches the one it issued for that response. Custom themes, scripts and reverse proxies must pass the completion URL through unchanged. Cross-device logins finish through status polling in the original browser and carry no `response_code`.
 
 ### Client Authentication (X.509)
 
 | Key | Description | Default |
 |-----|-------------|---------|
 | `clientIdScheme` | Wallet/verifier client ID scheme: `plain`, `x509_san_dns`, or `x509_hash`. | `x509_san_dns` |
-| `x509CertificatePem` | PEM-encoded verifier certificate material used for client ID derivation and request-object header material. | *(required for x509 schemes)* |
-| `x509SigningKeyJwk` | Explicit signing JWK override. Normally derived automatically. | *(auto-derived)* |
+| `x509CertificatePem` | PEM-encoded verifier certificate material used for client ID derivation and request-object header material. Accepts a `${vault.<name>}` reference. | *(required for x509 schemes)* |
+| `x509SigningKeyJwk` | Explicit signing JWK override. Normally derived automatically. Accepts a `${vault.<name>}` reference. | *(auto-derived)* |
 | `verifierInfo` | JSON value for the request object's `verifier_info` claim. | *(none)* |
 | `registrationCertificate` | EUDI Wallet relying party registration certificate (`rc-wrp+jwt`). Added to `verifier_info` in every request. See [Relying party certificates](#relying-party-certificates). | *(none)* |
 
@@ -106,6 +119,12 @@ This mode is intended for credentials that do not carry a stable account identif
 
 1. Combined PEM with leaf certificate, optional intermediate certificates, and private key.
 2. Certificate-only PEM when request objects should be signed with the Keycloak realm signing key instead.
+
+#### Keeping the verifier key in a vault
+
+`x509CertificatePem` and `x509SigningKeyJwk` accept a reference of the form `${vault.<name>}` instead of the value itself. Keycloak resolves it through its configured [vault provider](https://www.keycloak.org/server/vault) each time the provider is loaded; the resolved value is kept only in memory for that request. A missing secret fails the request with an error naming the setting.
+
+A vault reference is the recommended way to supply a private key. A key stored inline in the identity provider configuration is returned by the Admin REST API to every administrator who can view identity providers, and it ends up in realm exports.
 
 #### Relying party certificates
 
@@ -137,18 +156,20 @@ Keycloak does not check the registrar's trust chain or revocation status of eith
 | `vicalSigningCertPem` | PEM certificate(s) the VICAL signature must chain to. Required with `vicalUrl`. | *(none)* |
 | `certificateRevocationCheck` | `none`, `soft` or `strict` revocation checking (OCSP, then CRL) of SD-JWT and mDoc issuer certificate chains. See [Certificate revocation](#certificate-revocation). | `none` |
 | `mdocCertificateProfile` | `none` validates mDoc issuer chains only; `iso18013-5` also enforces the ISO/IEC 18013-5 Annex B certificate profiles. | `none` |
+| `x5cIssuerBinding` | Require an SD-JWT issuer certificate to name the `iss` value (see step 2 below). Turning it off lets any certificate anchored in the trust list sign for any issuer; use it only temporarily, with `allowedIssuers`, for issuers whose certificates do not carry their identifier yet. | `true` |
 | `allowedIssuers` | Comma-separated list of allowed SD-JWT issuer (`iss`) values, or `*`. mDoc credentials are not checked against this list because mDoc does not define a standard canonical credential-issuer string equivalent to SD-JWT `iss`. | `*` |
-| `clockSkewSeconds` | Clock skew tolerance for credential verification. | `60` |
+| `clockSkewSeconds` | Clock skew tolerance for credential and ID token time checks. | `60` |
+| `allowPrivateNetworkFetch` | Allow fetches of credential-supplied URLs (status lists, did:web and did:webvh documents, JWT VC issuer metadata and its `jwks_uri`) from loopback, private and link-local addresses. See [Outbound fetches](#outbound-fetches-from-credentials). | `false` |
 | `kbJwtMaxAgeSeconds` | Maximum accepted age of the SD-JWT KB-JWT `iat` claim. | `300` |
 
 For SD-JWT VC verification, issuer-key resolution follows this order:
 
 1. If DID resolution is enabled and the issuer is a DID, resolve it through its explicitly allowed `did:web` or `did:webvh` method. Failure, an unsupported method, or an empty key set rejects the credential; it cannot fall through to certificate or metadata verification. `did:webvh` also rejects when DID resolution is disabled.
-2. Validate an `x5c` certificate chain against the configured trust list.
-3. Outside strict X.509 mode, try JWT VC issuer metadata via `iss` and JOSE `kid` at `/.well-known/jwt-vc-issuer`, including `jwks_uri`. The resolved key is accepted only if its `x5c` chain is anchored in the trust list. A key published in metadata without an anchored chain is rejected. Issuers without a PKI must use did:web or did:webvh with `allowedIssuers`.
-4. Outside strict X.509 mode, try direct trusted certificates as the final fallback.
+2. If the credential carries an `x5c` header, validate the chain against the configured trust list. The leaf certificate must name the issuer: the `iss` value as a subjectAltName URI, or the host of `iss` as a subjectAltName dNSName. A presented `x5c` is final: if the chain does not validate, is revoked, or does not name the issuer, the credential is rejected and no later step is tried.
+3. Without an `x5c` header and outside strict X.509 mode, try JWT VC issuer metadata via `iss` and JOSE `kid` at `/.well-known/jwt-vc-issuer`, including `jwks_uri`. The resolved key is accepted only if its `x5c` chain is anchored in the trust list. A key published in metadata without an anchored chain is rejected. Issuers without a PKI must use did:web or did:webvh with `allowedIssuers`.
+4. Outside strict X.509 mode, as the final fallback, use a trusted certificate directly as the signing key. Only currently valid trusted certificates that themselves name the issuer (by the same subjectAltName rule) are used.
 
-Trust anchors are used only within their validity period. Only CA certificates anchor a presented chain; a trusted end-entity certificate is accepted only when it is itself the presented leaf. A presented `x5c` chain that fails validation rejects the credential; it is not retried against the trusted keys.
+Trust anchors are used only within their validity period. Only CA certificates anchor a presented chain; a trusted end-entity certificate is accepted only when it is itself the presented leaf.
 
 With DID resolution disabled, `enforceHaip=true` restricts this to the `x5c` path. With DID resolution enabled, the earlier DID path is still attempted. Use `enforceHaip=false` for the existing DID flow and read the [DID limitations](#didweb-issuer-verification).
 
@@ -164,7 +185,7 @@ Within the accepted trust list, credential signature verification uses only `...
 - The XML signature must be the single enveloped signature directly under the root, cover the whole document (`URI=""`), and verify with a certificate anchored in `trustListSigningCertPem`. Documents with a DOCTYPE are rejected.
 - For a LOTL, `trustListSigningCertPem` pins the LOTL itself (the European Commission publishes its signing certificates in the Official Journal). Each national list it points to must be signed by one of the certificates the LOTL lists for it. `trustListTerritories` limits which national lists are loaded; a national list that cannot be fetched or verified is skipped and logged, the others still apply.
 - Only services whose current status is granted (or recognised at national level) and whose type is in `trustListServiceTypes` become trust anchors. No type is accepted by default. Do not list broad types such as `http://uri.etsi.org/TrstSvc/Svctype/CA/QC`: every qualified certificate holder chains to those CAs and could then sign credentials. Use the type your credential issuers are registered under, for example `http://uri.etsi.org/TrstSvc/Svctype/EAA/Q` for qualified electronic attestation of attributes.
-- The cache follows the earliest `NextUpdate` across the loaded lists, capped by `trustListMaxCacheTtl`. Service history is not evaluated: only the current status counts.
+- The cache follows the earliest `NextUpdate` across the loaded lists, capped by `trustListMaxCacheTtlSeconds`. Service history is not evaluated: only the current status counts.
 - `trustListLoTEType`, if set, is compared with the list's `TSLType`.
 
 ### Certificate revocation
@@ -181,7 +202,7 @@ Answers are cached until their next update, at most 24 hours. Requests go throug
 
 mDoc issuer chains (`x5chain` in `issuerAuth`) are anchored in the trust list's issuance services and, when `vicalUrl` is set, in a VICAL such as the AAMVA list of US mobile driving licence issuers.
 
-- The VICAL is a COSE_Sign1 that must verify with an `x5chain` anchored in `vicalSigningCertPem`; an unsigned or unanchored VICAL is never used. It is cached until its `nextUpdate` (at most 24 hours), a failed refresh reuses the cached list for up to `trustListMaxStaleAge`, and a list past its `notAfter` is rejected.
+- The VICAL is a COSE_Sign1 that must verify with an `x5chain` anchored in `vicalSigningCertPem`; an unsigned or unanchored VICAL is never used. It is cached until its `nextUpdate` (at most 24 hours), a failed refresh reuses the cached list for up to `trustListMaxStaleAgeSeconds`, and a list past its `notAfter` is rejected.
 - Each VICAL IACA anchors only documents whose signed docType is listed in its `certificateInfo.docType`.
 - If the VICAL cannot be loaded, mDocs are still verified against the trust list alone.
 
@@ -195,6 +216,14 @@ Every Status List Token signature is verified, and an unverifiable token rejects
 2. The keys that verified the referenced credential, which covers DID-based SD-JWT issuers. A list accepted this way is cached only for that issuer.
 
 The status reference must be issuer-signed: for mDoc it is read from the signed MobileSecurityObject, and an SD-JWT `status` claim must not be selectively disclosable. Both Status List Token forms are supported: JWT (`application/statuslist+jwt`) and CWT (`application/statuslist+cwt`, a COSE_Sign1 with an `x5chain` or a key pinned in the trust list). The form is chosen from the response media type, falling back to the body's encoding. Any non-zero status, including suspended (`0x02`), rejects the login. Downloads are capped at 4 MiB and decompressed lists at 16 MiB.
+
+### Outbound fetches from credentials
+
+Status list URLs, did:web and did:webvh document URLs, and JWT VC issuer metadata URLs (including `jwks_uri`) come from the presented credential. By default Keycloak resolves the host first and refuses to fetch from loopback, private, link-local and similar non-public addresses. Only `http` and `https` URLs with a plain host are fetched.
+
+Set `allowPrivateNetworkFetch=true` when issuers or their status lists run on an internal network. The trust list and VICAL URLs configured by an administrator are not affected by this setting.
+
+The address check runs before the request is sent. It does not prevent DNS rebinding between the check and the connection, so restrict Keycloak's outbound network access as well where this matters.
 
 ### Caching
 
@@ -218,7 +247,7 @@ With `dcApiEnabled=true` the login page loads `oid4vp-dc-api.js`, which shows "U
 | `responseMode=direct_post.jwt`, or `enforceHaip=true` | `response_mode=dc_api.jwt` with an ephemeral P-256 key in `client_metadata` |
 | `responseMode=direct_post` | `response_mode=dc_api` |
 
-`expected_origins` and the presentation binding use the origin of Keycloak's front-end URL, so the login page must be served from that origin (set `hostname` when Keycloak runs behind a proxy). The wallet binds every presentation to that origin: the SD-JWT key binding JWT `aud` must be `origin:<origin>`, and mDoc device authentication must use the `OpenID4VPDCAPIHandover` transcript. A presentation made for a redirect flow, or for another site, is rejected.
+`expected_origins` and the presentation binding use a configured origin: `dcApiOrigin`, or the origin of the realm Frontend URL (**Realm settings → General → Frontend URL**) when `dcApiOrigin` is empty. The origin is never taken from request headers. If neither is set to a valid `http` or `https` URL, the button is not shown and a warning is logged. Set it to the origin that serves the login page, for example `https://login.example.com`. The wallet binds every presentation to that origin: the SD-JWT key binding JWT `aud` must be `origin:<origin>`, and mDoc device authentication must use the `OpenID4VPDCAPIHandover` transcript. A presentation made for a redirect flow, or for another site, is rejected.
 
 #### ISO mdoc (Safari and Apple Wallet)
 
@@ -234,7 +263,7 @@ The flow is not offered while `useIdTokenSubject` is on, because the browser API
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `crossDevicePollIntervalMs` | How often the cross-device login page asks Keycloak whether the wallet has finished. Clamped to 500–30000 ms. The pre-0.1.0 key `ssePollIntervalMs` is read when this key is unset. | `2000` |
+| `crossDevicePollIntervalMs` | How often the cross-device login page asks Keycloak whether the wallet has finished. Clamped to 500 to 30000 ms. The `0.1.0-rc.1` key `ssePollIntervalMs` is still read when this key is unset. | `2000` |
 | `crossDeviceCompleteTtlSeconds` | Lifetime of the cross-device completion marker. The deferred auth record itself uses the realm login timeout. | `300` |
 
 ## IdP Mappers

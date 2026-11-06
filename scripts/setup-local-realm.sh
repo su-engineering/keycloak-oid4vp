@@ -17,6 +17,12 @@ Arguments:
   <verifier-info-file>   Path to JSON file containing verifier attestations
   [trust-list-url]       Optional trust list URL override (default: BMI test trust list)
 
+Environment:
+  TRUST_LIST_SIGNING_CERT_PEM  PEM file path (or PEM text) of the certificate that
+                               signs the trust list. When unset, the generated realm
+                               sets trustListAllowUnsigned=true, which is for local
+                               testing only.
+
 The generated files are gitignored and specific to your local environment.
 
 Example:
@@ -54,6 +60,21 @@ fi
 # Read and escape for JSON embedding
 PEM_CONTENT=$(cat "$PEM_FILE" | sed 's/$/\\n/' | tr -d '\n' | sed 's/\\n$//')
 VERIFIER_INFO_CONTENT=$(cat "$VERIFIER_INFO_FILE" | tr -d '\n' | sed 's/"/\\"/g')
+
+# Trust lists must be signed. Use TRUST_LIST_SIGNING_CERT_PEM when it is set; otherwise
+# accept the unsigned trust list. trustListAllowUnsigned is for local testing only and
+# must not be used in a deployed realm.
+if [ -n "${TRUST_LIST_SIGNING_CERT_PEM:-}" ]; then
+  if [ -f "$TRUST_LIST_SIGNING_CERT_PEM" ]; then
+    TRUST_LIST_CERT_CONTENT=$(sed 's/$/\\n/' "$TRUST_LIST_SIGNING_CERT_PEM" | tr -d '\n' | sed 's/\\n$//')
+  else
+    TRUST_LIST_CERT_CONTENT=$(printf '%s\n' "$TRUST_LIST_SIGNING_CERT_PEM" | sed 's/$/\\n/' | tr -d '\n' | sed 's/\\n$//')
+  fi
+  TRUST_LIST_SIGNATURE_CONFIG="\"trustListSigningCertPem\": \"${TRUST_LIST_CERT_CONTENT}\","
+else
+  echo "TRUST_LIST_SIGNING_CERT_PEM is not set: the realm accepts an unsigned trust list (local testing only)." >&2
+  TRUST_LIST_SIGNATURE_CONFIG='"trustListAllowUnsigned": "true",'
+fi
 
 cat > "$REALM_OUT" <<REALMEOF
 {
@@ -214,6 +235,7 @@ cat > "$REALM_OUT" <<REALMEOF
         "clientSecret": "not-used",
         "enforceHaip": "true",
         "trustListUrl": "${TRUST_LIST_URL}",
+        ${TRUST_LIST_SIGNATURE_CONFIG}
         "clientIdScheme": "x509_san_dns",
         "walletScheme": "openid4vp://",
         "userMappingClaim": "family_name",

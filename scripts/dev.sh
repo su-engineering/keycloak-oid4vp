@@ -6,7 +6,7 @@ PROVIDER_JAR="$ROOT_DIR/target/keycloak-extension-oid4vp.jar"
 # This sandbox workflow explicitly uses the generated local realm.
 export OID4VP_REALM_IMPORT="${OID4VP_REALM_IMPORT:-./src/test/resources/realm-wallet-demo-local.json}"
 
-# Sensible defaults – override via flags or env vars
+# Defaults; override via flags or env vars
 DEFAULT_SANDBOX_DIR="${SANDBOX_DIR:-${ROOT_DIR}/sandbox}"
 DEFAULT_PEM_FILE="${DEFAULT_SANDBOX_DIR}/sandbox-ngrok-combined.pem"
 DEFAULT_VERIFIER_INFO="${DEFAULT_SANDBOX_DIR}/sandbox-verifier-info.json"
@@ -19,7 +19,7 @@ One-command local development: builds the extension, generates realm config
 from sandbox certificates, and starts Keycloak (optionally behind an ngrok tunnel).
 
 Modes:
-  (default)                Sandbox mode – uses X.509 sandbox certificates
+  (default)                Sandbox mode: uses X.509 sandbox certificates
   --local-wallet           Use local oid4vc-dev wallet (trust list from wallet, no ngrok)
 
 Options:

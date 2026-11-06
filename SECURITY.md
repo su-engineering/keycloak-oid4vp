@@ -17,7 +17,7 @@ We will review the report, coordinate any fix and disclosure with the reporter, 
 
 ## Supported versions
 
-The project currently has a development baseline (`0.1.0-SNAPSHOT`) and no public release support schedule. Security fixes will be developed on `main`; a versioned support policy will accompany public releases. The Keycloak CI matrix describes tested compatibility, not a security support commitment from this project or Keycloak.
+Security fixes are developed on `main` and included in the next tagged version; the latest tagged version is `0.2.0`. Only the latest tagged version and `main` receive fixes; there is no longer-term support schedule. The Keycloak CI matrix describes tested compatibility, not a security support commitment from this project or Keycloak.
 
 ## Known limitations
 

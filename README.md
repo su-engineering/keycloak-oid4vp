@@ -29,11 +29,11 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 
 ### Project status
 
-The extension targets Keycloak 26.8. [Versioned JARs and checksums](https://github.com/su-engineering/keycloak-oid4vp/releases) are built and tested for both supported Keycloak patch versions. The did:web SD-JWT flow is deployed; enterprise support is being prepared. See [release and download instructions](docs/releases.md).
+The extension targets Keycloak 26.8. [Version 0.2.0](https://github.com/su-engineering/keycloak-oid4vp/releases) publishes a tested JAR and checksum for Keycloak 26.8.0 and 26.8.1. The did:web SD-JWT flow is deployed; enterprise support is being prepared. See [release and download instructions](docs/releases.md).
 
-Keycloak 26.8 also ships an experimental native OID4VP verifier (feature `oid4vc-vp`). This extension uses its own provider ID, `oid4vp-wallet`, so both can be installed side by side; upgrading from `0.1.0-rc.1` requires a [one-line database migration](docs/migration.md#provider-id-rename-and-keycloak-268).
+Keycloak 26.8 also ships an experimental native OID4VP verifier (feature `oid4vc-vp`). This extension uses its own provider ID, `oid4vp-wallet`, so both can be installed side by side. Upgrading from `0.1.0-rc.1` requires a database migration and configuration changes; see the [upgrade checklist](docs/migration.md#upgrading-from-010-rc1-required-actions).
 
-**Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** In particular, the legacy did:web resolver's key authorization and standard path/port handling need further work. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
+**Read the [trust limitations](docs/configuration.md#didweb-issuer-verification) before integration.** The did:web resolver checks that the DID document `id` matches the DID, accepts only `assertionMethod` keys controlled by the DID, and follows the standard did:web path and port layout; path DIDs that still publish at `<path>/.well-known/did.json` need `didWebLegacyPathLayout=true`. The HAIP configuration option is not a certification claim. See the [enterprise readiness plan](docs/enterprise-readiness.md) for the remaining security and operational work.
 
 ## Try it locally
 

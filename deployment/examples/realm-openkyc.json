@@ -187,7 +187,7 @@
         "sameDeviceEnabled": "true",
         "crossDeviceEnabled": "true",
         "enforceHaip": "false",
-        "enableDidResolution": "true",
+        "didResolutionEnabled": "true",
         "allowedDidMethods": "did:web",
         "doNotStoreUsers": "true",
         "dcqlQuery": "{\"credentials\":[{\"id\":\"age_over_18\",\"format\":\"dc+sd-jwt\",\"meta\":{\"vct_values\":[\"AgeOverEighteenCredentialSD\"]},\"claims\":[{\"id\":\"age_over_18\",\"path\":[\"ageOverEighteen\"]}]}]}",
@@ -303,5 +303,5 @@
     "userProfileEnabled": "true",
     "defaultSignatureAlgorithm": "ES256"
   },
-  "keycloakVersion": "26.5.4"
+  "keycloakVersion": "26.8.1"
 }

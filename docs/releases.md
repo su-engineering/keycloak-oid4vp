@@ -1,12 +1,12 @@
 # GitHub releases
 
-Versioned provider JARs and checksums are available under [Releases](https://github.com/su-engineering/keycloak-oid4vp/releases). Repository access is required while the repository is private.
+Versioned provider JARs and checksums are available under [Releases](https://github.com/su-engineering/keycloak-oid4vp/releases).
 
-Each release contains a separate JAR for Keycloak **26.8.0** and **26.8.1**, plus `SHA256SUMS`. Releases up to `0.1.0-rc.1` targeted 26.5.4 and 26.5.5. Use Java 21 and the JAR matching your runtime. Prereleases are for integration testing and are explicitly marked on GitHub.
+Each release contains a separate JAR for each tested Keycloak version, plus `SHA256SUMS`. `0.1.0-rc.1` targets Keycloak 26.5.4 and 26.5.5. The next tagged version targets Keycloak **26.8.0** and **26.8.1**. Use Java 21 and the JAR matching your runtime. Prereleases are for integration testing and are explicitly marked on GitHub.
 
 ## Download and install
 
-For example, using the authenticated GitHub CLI:
+For example, using the GitHub CLI to download `0.1.0-rc.1` for Keycloak 26.5.5:
 
 ```sh
 gh release download v0.1.0-rc.1 --repo su-engineering/keycloak-oid4vp \
@@ -16,7 +16,7 @@ sha256sum --check SHA256SUMS
 cp keycloak-extension-oid4vp-0.1.0-rc.1-keycloak-26.5.5.jar keycloak-extension-oid4vp.jar
 ```
 
-Follow [installation](installation.md#add-it-to-keycloak) and [migration](migration.md). Keep the original versioned filename and checksum in your deployment record, and install only one provider JAR.
+Substitute the version and Keycloak runtime you need. Follow [installation](installation.md#add-it-to-keycloak) and [migration](migration.md). Keep the original versioned filename and checksum in your deployment record, and install only one provider JAR.
 
 ## Create the next release
 
@@ -26,11 +26,11 @@ Follow [installation](installation.md#add-it-to-keycloak) and [migration](migrat
 4. Create and push an annotated tag for that commit:
 
    ```sh
-   git tag -a v0.1.0-rc.1 -m 'Keycloak OID4VP 0.1.0-rc.1'
-   git push origin v0.1.0-rc.1
+   git tag -a vX.Y.Z -m 'Keycloak OID4VP X.Y.Z'
+   git push origin vX.Y.Z
    ```
 
-   Substitute the new version for both commands.
+   Substitute the new version for `X.Y.Z` in both commands.
 
 The [Release workflow](../.github/workflows/release.yaml) validates the tag, matching Maven version, release notes and membership in `main` history. It then runs the existing full CI matrix, retains each tested JAR, and publishes those exact artifacts with checksums. A failed test prevents publication. Publication uses the built-in `GITHUB_TOKEN`; no publishing secret is required. Only the publishing job receives repository write permission.
 

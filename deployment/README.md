@@ -4,6 +4,8 @@ This directory builds Keycloak **26.8.1** with PostgreSQL and TLS termination at
 
 The JAR contains `su-engineering` and `openkyc`. Direct wallet entry is configured by the realm authentication flow. Existing OpenKYC deployments must select `openkyc` after upgrading; the IdP alias remains `oid4vp`. See [migration](../docs/migration.md#openkyc-theme-rename-and-generic-realm).
 
+Existing deployments upgrading from `0.1.0-rc.1` must stop Keycloak, back up the database and run [`scripts/migrate-provider-id.sql`](../scripts/migrate-provider-id.sql) before starting the new build, because the identity provider ID changes from `oid4vp` to `oid4vp-wallet`. Work through the [upgrade checklist](../docs/migration.md#upgrading-from-010-rc1-required-actions) for the other required changes.
+
 ## Files
 
 | File | Purpose |
@@ -18,7 +20,7 @@ The JAR contains `su-engineering` and `openkyc`. Direct wallet entry is configur
 
 These are compatibility files, not hardened production defaults:
 
-- The Compose file has fallback database/admin credentials. Set explicit secrets through the deployment platform.
+- The Compose file has no default database or admin password. `KC_DB_PASSWORD` and `KC_BOOTSTRAP_ADMIN_PASSWORD` must be set through the deployment platform, otherwise Compose refuses to start.
 - The current healthcheck ends with `|| exit 0`; it can report success when Keycloak is unavailable.
 - The generic import starts with a disabled IdP. Configure verifier signing material, credential requests, issuer trust, and application clients in the Admin Console before enabling it.
 - The OpenKYC example preserves deployment-specific settings and its verifier certificate; review them before reusing it for a new environment.
@@ -53,10 +55,13 @@ The build copies exactly one provider JAR: `/opt/keycloak/providers/keycloak-ext
 | `OID4VP_REALM_IMPORT` | Build-time realm source path; defaults to `deployment/realm-import.json` |
 | `KC_DB_URL` | JDBC URL, normally `jdbc:postgresql://postgres:5432/keycloak` |
 | `KC_DB_USERNAME` | Database user shared with PostgreSQL initialization |
-| `KC_DB_PASSWORD` | Database password; supply an explicit secret |
-| `KEYCLOAK_ADMIN` | Existing bootstrap admin variable used by this Compose file |
-| `KEYCLOAK_ADMIN_PASSWORD` | Existing bootstrap admin password variable; supply an explicit secret |
-| `SERVICE_FQDN_KEYCLOAK` / `SERVICE_URL_KEYCLOAK` | Hostname and URL values used by the Coolify configuration |
+| `KC_DB_PASSWORD` | Database password; required |
+| `KC_BOOTSTRAP_ADMIN_USERNAME` | Temporary bootstrap admin user, created only when the master realm has no admin; defaults to `admin` |
+| `KC_BOOTSTRAP_ADMIN_PASSWORD` | Bootstrap admin password; required |
+| `SERVICE_URL_KEYCLOAK` | Public URL set by Coolify; passed to `KC_HOSTNAME` and `KC_HOSTNAME_ADMIN` |
+| `SERVICE_FQDN_KEYCLOAK_8080` | Coolify routing variable for port 8080 |
+
+`KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD` are deprecated in Keycloak 26, and the hostname v1 options `KC_HOSTNAME_URL` and `KC_HOSTNAME_ADMIN_URL` were removed. The Compose file uses the replacements above. Deployments that set the old variable names in Coolify must rename them.
 
 Confirm values in the rendered Compose configuration privately. Full `docker compose config` output may contain secrets; `config --quiet` checks structure without printing them.
 
@@ -70,4 +75,4 @@ Changing the Dockerfile image tag alone is not a validated runtime upgrade. Foll
 
 ## Troubleshooting
 
-Start with [operations](../docs/operations.md). For deployment-specific failures, inspect database connectivity, Coolify network membership, the configured external scheme/host, final realm import contents, and proxy handling of the SSE stream. A green Compose health status is insufficient with the current probe.
+Start with [operations](../docs/operations.md). For deployment-specific failures, inspect database connectivity, Coolify network membership, the configured external scheme/host, and the final realm import contents. A green Compose health status is insufficient with the current probe.
