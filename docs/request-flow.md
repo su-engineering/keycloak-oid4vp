@@ -219,14 +219,17 @@ Oid4vpIdentityProviderEndpoint.createDcApiRequest
     → Oid4vpDcApiService.createRequest
         → fresh state, nonce, optional encryption key, origin from the Keycloak front-end URL
         → Oid4vpRedirectFlowService.buildDcApiRequest  (signed or unsigned, dc_api or dc_api.jwt)
-    ← {"state": "...", "protocol": "openid4vp-v1-...", "data": {...}}
+    ← {"state": "...", "requests": [{"protocol": "openid4vp-v1-...", "data": {...}},
+                                   {"protocol": "org-iso-mdoc", "data": {"deviceRequest": ..., "encryptionInfo": ...}}]}
 
-navigator.credentials.get({digital: {requests: [{protocol, data}]}})
+navigator.credentials.get({digital: {requests}})
 
-POST /dc-api/response  request_handle=..., state=..., response=<credential.data as JSON>
+POST /dc-api/response  request_handle=..., state=..., protocol=..., response=<credential.data as JSON>
 Oid4vpIdentityProviderEndpoint.handleDcApiResponse
     → Oid4vpDcApiService.handleResponse
         → decrypts {"response": JWE} for dc_api.jwt, or reads {"vp_token": {...}}
+        → org-iso-mdoc: IsoMdocDcApi.openResponse (HPKE, info = dcapi SessionTranscript),
+          splitting the DeviceResponse into one presentation per credential query
         → Oid4vpCallbackProcessor.process  (VpTokenProcessor.Request.forDcApi: aud origin:<origin>, OpenID4VPDCAPIHandover)
         → removes the request context so the nonce cannot be reused
     → Oid4vpDirectPostService.storeAndSignal(..., isCrossDevice=false)
@@ -258,6 +261,8 @@ Errors can occur at multiple points:
 | `SdJwtVerifier` | SD-JWT signature + KB-JWT verification, disclosure resolution, verification-order policy (`x5c` first, metadata fallback outside HAIP) |
 | `JwtVcIssuerMetadataResolver` | JWT VC issuer metadata discovery (`/.well-known/jwt-vc-issuer`), `jwks`/`jwks_uri` lookup, and bounded caching by response TTL and JWK `exp` |
 | `MdocVerifier` | mDoc issuer/device auth verification, digest/validity checks, claim extraction |
+| `IsoMdocDcApi` | ISO/IEC 18013-7 Annex C request (DeviceRequest, EncryptionInfo, readerAuthAll) and response decryption |
+| `Hpke` | RFC 9180 base mode for DHKEM(P-256)/HKDF-SHA256/AES-128-GCM, used by Annex C |
 | `MdocSessionTranscriptBuilder` | Builds OID4VP 1.0 (redirect and Digital Credentials API) and ISO 18013-7 SessionTranscript structures |
 | `StatusListVerifier` | Token Status List fetching, caching, revocation bit checking |
 | `TrustListProvider` | ETSI trust list fetching, certificate extraction, caching, optional JWT signature verification |

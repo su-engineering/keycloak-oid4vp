@@ -75,6 +75,8 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
     @BeforeEach
     void installDigitalCredentialsStub() throws Exception {
         originOverride.set(null);
+        isoMdocWallet = false;
+        isoReaderAuthVerified = false;
         context.exposeFunction("__walletDcApi", args -> callWallet((String) args[0]));
         context.addInitScript("""
                 (() => {
@@ -162,6 +164,34 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
     }
 
     @Test
+    void isoMdocLoginLikeSafari() throws Exception {
+        // Safari and Apple Wallet answer only ISO/IEC 18013-7 Annex C (org-iso-mdoc).
+        idpConfig.set(Oid4vpIdentityProviderConfig.DCQL_QUERY, MDOC_QUERY).apply();
+        isoMdocWallet = true;
+
+        loginThroughDigitalCredentialsApi("dcapi-iso");
+
+        assertThat(lastProtocol.get()).isEqualTo("org-iso-mdoc");
+        assertThat(isoReaderAuthVerified)
+                .as("the request is signed with readerAuthAll")
+                .isTrue();
+    }
+
+    @Test
+    void isoMdocResponseForAnotherOriginIsRejected() throws Exception {
+        idpConfig.set(Oid4vpIdentityProviderConfig.DCQL_QUERY, MDOC_QUERY).apply();
+        isoMdocWallet = true;
+        originOverride.set("https://attacker.example");
+
+        flow.navigateToLoginPage();
+        flow.clickOid4vpIdpButton();
+        clickDcApiButton();
+
+        page.waitForURL(url -> url.contains("error="), new Page.WaitForURLOptions().setTimeout(30000));
+        assertThat(flow.isCallbackUrl(page.url())).as("Login must not succeed").isFalse();
+    }
+
+    @Test
     void buttonStaysHiddenWithoutBrowserSupport() throws Exception {
         idpConfig.set(Oid4vpIdentityProviderConfig.DCQL_QUERY, SD_JWT_QUERY).apply();
         context.addInitScript("delete window.DigitalCredential;");
@@ -176,6 +206,8 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
 
     private final AtomicReference<String> lastProtocol = new AtomicReference<>();
     private final AtomicReference<String> lastRequestBody = new AtomicReference<>();
+    private volatile boolean isoMdocWallet;
+    private volatile boolean isoReaderAuthVerified;
 
     private void loginThroughDigitalCredentialsApi(String usernamePrefix) {
         flow.navigateToLoginPage();
@@ -204,6 +236,16 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
         try {
             lastRequestBody.set(requestJson);
             String origin = originOverride.get() != null ? originOverride.get() : pageOrigin();
+            if (isoMdocWallet) {
+                IsoMdocTestWallet.Answer answer = IsoMdocTestWallet.answer(
+                        requestJson,
+                        origin,
+                        issuedMdoc(),
+                        env.dcApiWalletHolderKey().getPrivate());
+                isoReaderAuthVerified = answer.readerAuthVerified();
+                lastProtocol.set("org-iso-mdoc");
+                return answer.credentialJson();
+            }
             HttpResponse<String> response = http.send(
                     HttpRequest.newBuilder(URI.create(walletHostUrl() + "/api/dc-api"))
                             .timeout(Duration.ofSeconds(30))
@@ -227,6 +269,20 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
         } catch (Exception e) {
             throw new IllegalStateException("Wallet call failed: " + e.getMessage(), e);
         }
+    }
+
+    /** The IssuerSigned structure of the wallet's PID mdoc, base64url. */
+    private String issuedMdoc() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (var credential : mapper.readTree(get("/api/credentials"))) {
+            if ("mso_mdoc".equals(credential.path("format").asText())) {
+                return mapper.readTree(
+                                get("/api/credentials/" + credential.path("id").asText()))
+                        .path("raw")
+                        .asText();
+            }
+        }
+        throw new IllegalStateException("The DC API wallet holds no mdoc");
     }
 
     private String pageOrigin() {

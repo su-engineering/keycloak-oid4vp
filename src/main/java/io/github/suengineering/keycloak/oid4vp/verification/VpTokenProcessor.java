@@ -84,7 +84,8 @@ public class VpTokenProcessor {
             String mdocGeneratedNonce,
             String encryptionJwkThumbprint,
             String dcqlQuery,
-            String dcApiOrigin) {
+            String dcApiOrigin,
+            String isoEncryptionInfo) {
 
         /** Redirect-flow request: presentations are bound to the client ID and response URI. */
         public Request(
@@ -103,6 +104,7 @@ public class VpTokenProcessor {
                     mdocGeneratedNonce,
                     encryptionJwkThumbprint,
                     dcqlQuery,
+                    null,
                     null);
         }
 
@@ -121,7 +123,16 @@ public class VpTokenProcessor {
                     null,
                     encryptionJwkThumbprint,
                     dcqlQuery,
-                    origin);
+                    origin,
+                    null);
+        }
+
+        /**
+         * ISO/IEC 18013-7 Annex C ({@code org-iso-mdoc}) request: mDoc device authentication is bound
+         * to the {@code dcapi} transcript over the {@code encryptionInfo} that was sent and the origin.
+         */
+        public static Request forIsoDcApi(String vpToken, String origin, String encryptionInfo, String dcqlQuery) {
+            return new Request(vpToken, null, null, null, null, null, dcqlQuery, origin, encryptionInfo);
         }
     }
 
@@ -194,7 +205,8 @@ public class VpTokenProcessor {
                             request.alternateResponseUri(),
                             request.mdocGeneratedNonce(),
                             request.encryptionJwkThumbprint(),
-                            request.dcApiOrigin());
+                            request.dcApiOrigin(),
+                            request.isoEncryptionInfo());
                     if (credential == null) throw new IdentityBrokerException("Unsupported VP token format for " + id);
                     dcql.validateCredential(credential);
                     credentials.add(credential);
@@ -254,8 +266,12 @@ public class VpTokenProcessor {
             String alternateResponseUri,
             String mdocGeneratedNonce,
             String encryptionJwkThumbprint,
-            String dcApiOrigin) {
+            String dcApiOrigin,
+            String isoEncryptionInfo) {
 
+        if (isoEncryptionInfo != null && !mdocVerifier.isMdoc(credential)) {
+            throw new IdentityBrokerException("org-iso-mdoc responses carry only mDoc documents: " + credentialId);
+        }
         if (sdJwtVerifier.isSdJwt(credential)) {
             SdJwtVerificationResult result =
                     verifySdJwtWithFallback(credential, clientId, expectedNonce, trustedCerts, alternateResponseUri);
@@ -278,16 +294,19 @@ public class VpTokenProcessor {
         if (mdocVerifier.isMdoc(credential)) {
             // Use alternateResponseUri as the response_uri for session transcript
             byte[] jwkThumbprintBytes = decodeJwkThumbprint(encryptionJwkThumbprint);
-            MdocVerificationResult result = dcApiOrigin != null
-                    ? mdocVerifier.verifyDcApi(credential, trustedCerts, dcApiOrigin, expectedNonce, jwkThumbprintBytes)
-                    : mdocVerifier.verifyWithTrustedCerts(
-                            credential,
-                            trustedCerts,
-                            clientId,
-                            expectedNonce,
-                            alternateResponseUri,
-                            mdocGeneratedNonce,
-                            jwkThumbprintBytes);
+            MdocVerificationResult result = isoEncryptionInfo != null
+                    ? mdocVerifier.verifyIsoDcApi(credential, trustedCerts, isoEncryptionInfo, dcApiOrigin)
+                    : dcApiOrigin != null
+                            ? mdocVerifier.verifyDcApi(
+                                    credential, trustedCerts, dcApiOrigin, expectedNonce, jwkThumbprintBytes)
+                            : mdocVerifier.verifyWithTrustedCerts(
+                                    credential,
+                                    trustedCerts,
+                                    clientId,
+                                    expectedNonce,
+                                    alternateResponseUri,
+                                    mdocGeneratedNonce,
+                                    jwkThumbprintBytes);
             // mDoc status lives in the signed MobileSecurityObject, never in disclosed elements.
             if (result.msoStatus() != null) {
                 statusListVerifier.checkRevocationStatus(

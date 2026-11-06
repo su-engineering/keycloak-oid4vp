@@ -157,6 +157,16 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .defaultValue("false")
                 .add()
                 .property()
+                .name(Oid4vpIdentityProviderConfig.DC_API_ISO_MDOC_ENABLED)
+                .label("Offer ISO mdoc over the Digital Credentials API")
+                .helpText("Also offer ISO/IEC 18013-7 Annex C (org-iso-mdoc), the protocol of Safari and Apple Wallet, "
+                        + "when every DCQL credential query is an mdoc with its own docType. The request is signed with the "
+                        + "X.509 signing key and certificate when they are a P-256 key; Apple Wallet only answers signed "
+                        + "requests with a certificate issued through Apple Business Connect.")
+                .type(ProviderConfigProperty.BOOLEAN_TYPE)
+                .defaultValue("true")
+                .add()
+                .property()
                 .name(Oid4vpIdentityProviderConfig.WALLET_SCHEME)
                 .label("Wallet URL Scheme")
                 .helpText("Custom URL scheme for wallet apps (e.g., openid4vp://, haip://).")

@@ -71,6 +71,7 @@ class Oid4vpDcApiServiceTest {
     private Oid4vpCallbackProcessor callbackProcessor;
     private AuthenticationSessionModel authSession;
     private Oid4vpDcApiService service;
+    private Oid4vpIdentityProvider provider;
 
     @BeforeAll
     static void initCrypto() {
@@ -90,8 +91,9 @@ class Oid4vpDcApiServiceTest {
         when(config.getResolvedResponseMode()).thenReturn(Oid4vpResponseMode.DIRECT_POST);
         when(config.getClientIdScheme()).thenReturn("plain");
         when(config.getIdentityCredentialId()).thenReturn(null);
+        when(config.isDcApiIsoMdocEnabled()).thenReturn(true);
 
-        Oid4vpIdentityProvider provider = mock(Oid4vpIdentityProvider.class);
+        provider = mock(Oid4vpIdentityProvider.class);
         when(provider.getConfig()).thenReturn(config);
         when(provider.prepareDcqlQueryFromConfig())
                 .thenReturn(new PreparedDcqlQuery("{\"credentials\":[]}", List.of("urn:eudi:pid:1")));
@@ -134,6 +136,40 @@ class Oid4vpDcApiServiceTest {
         verify(redirectFlowService).buildDcApiRequest(params.capture(), eq(ORIGIN));
         assertThat(params.getValue().responseMode()).isEqualTo(Oid4vpResponseMode.DC_API);
         assertThat(params.getValue().nonce()).isEqualTo(context.nonce());
+    }
+
+    @Test
+    void createRequest_offersIsoMdocNextToOpenId4vpForAnMdocOnlyQuery() {
+        String mdocQuery = "{\"credentials\":[{\"id\":\"mdl\",\"format\":\"mso_mdoc\","
+                + "\"meta\":{\"doctype_value\":\"org.iso.18013.5.1.mDL\"},"
+                + "\"claims\":[{\"path\":[\"org.iso.18013.5.1\",\"age_over_18\"]}]}]}";
+        when(provider.prepareDcqlQueryFromConfig()).thenReturn(new PreparedDcqlQuery(mdocQuery, List.of()));
+
+        Oid4vpDcApiService.DcApiRequest request = service.createRequest(HANDLE);
+
+        assertThat(request.requests())
+                .extracting(r -> r.get("protocol"))
+                .containsExactly("openid4vp-v1-unsigned", "org-iso-mdoc");
+        ArgumentCaptor<Oid4vpRequestObjectStore.RequestContextEntry> stored =
+                ArgumentCaptor.forClass(Oid4vpRequestObjectStore.RequestContextEntry.class);
+        verify(store).storeRequestContext(eq(session), stored.capture());
+        assertThat(stored.getValue().isoEncryptionInfo())
+                .isEqualTo(((Map<?, ?>) request.requests().get(1).get("data")).get("encryptionInfo"));
+        assertThat(stored.getValue().isoRecipientKeyJson()).contains("\"d\"");
+    }
+
+    @Test
+    void createRequest_doesNotOfferIsoMdocForSdJwtQueries() {
+        assertThat(service.createRequest(HANDLE).requests()).hasSize(1);
+    }
+
+    @Test
+    void handleResponse_rejectsAnIsoAnswerWhenNoIsoRequestWasMade() {
+        givenStoredContext(null);
+
+        assertThatThrownBy(() -> service.handleResponse(HANDLE, STATE, "org-iso-mdoc", "{\"response\":\"x\"}"))
+                .isInstanceOf(IdentityBrokerException.class)
+                .hasMessageContaining("No org-iso-mdoc request");
     }
 
     @Test
@@ -271,6 +307,8 @@ class Oid4vpDcApiServiceTest {
                 List.of(),
                 "{\"credentials\":[]}",
                 null,
-                ORIGIN);
+                ORIGIN,
+                null,
+                null);
     }
 }

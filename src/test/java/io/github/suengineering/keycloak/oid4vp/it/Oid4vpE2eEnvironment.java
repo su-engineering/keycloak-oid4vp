@@ -99,6 +99,7 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
     private final Oid4vcContainer encryptedRequestWallet;
     private final Oid4vcContainer isoWallet;
     private final GenericContainer<?> dcApiWallet;
+    private final KeyPair dcApiWalletHolderKey;
     private final Oid4vpTestCallbackServer callback;
     private final KeycloakAdminClient adminClient;
     private final Playwright playwright;
@@ -145,7 +146,14 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
                 .withStatusList()
                 .withBaseUrl(ISO_WALLET_INTERNAL_BASE_URL)
                 .withSessionTranscript("iso");
+        // A holder key the tests know, so they can also answer as an ISO 18013-7 Annex C wallet.
+        dcApiWalletHolderKey = generateEcKeyPair();
+        Path holderKeyFile = Files.createTempFile("eudi-holder-", ".pem");
+        Files.writeString(
+                holderKeyFile,
+                toPem("PRIVATE KEY", dcApiWalletHolderKey.getPrivate().getEncoded()));
         dcApiWallet = new GenericContainer<>(DC_API_WALLET_IMAGE)
+                .withCopyFileToContainer(MountableFile.forHostPath(holderKeyFile, 0644), "/tmp/holder.pem")
                 .withNetwork(network)
                 .withNetworkAliases("eudi-dcapi")
                 .withExposedPorts(8085)
@@ -158,6 +166,8 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
                         "8085",
                         "--auto-accept",
                         "--pid",
+                        "--key",
+                        "/tmp/holder.pem",
                         "--base-url",
                         DC_API_WALLET_INTERNAL_BASE_URL)
                 .withLogConsumer(frame ->
@@ -267,6 +277,11 @@ public final class Oid4vpE2eEnvironment implements AutoCloseable {
     /** A wallet that serves the Digital Credentials API ({@code POST /api/dc-api}). */
     public GenericContainer<?> dcApiWallet() {
         return dcApiWallet;
+    }
+
+    /** The holder key the DC API wallet binds its credentials to. */
+    public KeyPair dcApiWalletHolderKey() {
+        return dcApiWalletHolderKey;
     }
 
     public Oid4vcContainer isoWallet() {

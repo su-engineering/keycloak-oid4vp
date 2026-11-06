@@ -80,7 +80,30 @@ public class Oid4vpRequestObjectStore {
             List<String> configuredCredentialTypes,
             String dcqlQuery,
             String identityCredentialId,
-            String origin) {
+            String origin,
+            String isoEncryptionInfo,
+            String isoRecipientKeyJson) {
+
+        /** The same context for an OpenID4VP answer, without the ISO mdoc values. */
+        public RequestContextEntry withoutIsoMdoc() {
+            return new RequestContextEntry(
+                    requestHandle,
+                    rootSessionId,
+                    tabId,
+                    state,
+                    effectiveClientId,
+                    responseUri,
+                    flow,
+                    nonce,
+                    encryptionKeyJson,
+                    encryptionJwkThumbprint,
+                    configuredCredentialTypes,
+                    dcqlQuery,
+                    identityCredentialId,
+                    origin,
+                    null,
+                    null);
+        }
 
         /** Redirect-flow request context; {@code origin} is only set for the Digital Credentials API flow. */
         public RequestContextEntry(
@@ -111,6 +134,8 @@ public class Oid4vpRequestObjectStore {
                     configuredCredentialTypes,
                     dcqlQuery,
                     identityCredentialId,
+                    null,
+                    null,
                     null);
         }
     }

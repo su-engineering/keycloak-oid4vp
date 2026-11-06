@@ -128,6 +128,27 @@ public class MdocVerifier {
     }
 
     /**
+     * Full verification of a document from an ISO/IEC 18013-7 Annex C ({@code org-iso-mdoc})
+     * response, with device authentication bound to the {@code dcapi} SessionTranscript.
+     *
+     * @param encryptionInfo the {@code encryptionInfo} string exactly as it was sent to the browser
+     */
+    public MdocVerificationResult verifyIsoDcApi(
+            String deviceResponseToken,
+            List<X509Certificate> trustedCertificates,
+            String encryptionInfo,
+            String origin) {
+        if (StringUtil.isBlank(encryptionInfo) || StringUtil.isBlank(origin)) {
+            throw new IllegalStateException(
+                    "mDoc presentation requires device authentication and complete session context");
+        }
+        return verify(
+                deviceResponseToken,
+                trustedCertificates,
+                List.of(IsoMdocDcApi.sessionTranscript(encryptionInfo, origin)));
+    }
+
+    /**
      * Verifies the document. With {@code transcripts == null} only issuer-side checks run; otherwise
      * device authentication is required and must verify against one of the candidate transcripts.
      */
