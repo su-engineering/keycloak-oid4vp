@@ -250,7 +250,7 @@ public class Oid4vpRedirectFlowService {
     public Oid4vpJwk createResponseEncryptionKey() {
         try {
             Oid4vpJwk key = Oid4vpJwk.generate("P-256", "ECDH-ES", "enc");
-            LOG.tracef("Generated ephemeral encryption key: kid=%s, jwk=\n%s", key.keyId(), key.toJson());
+            LOG.tracef("Generated ephemeral encryption key: kid=%s", key.keyId());
             return key;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to generate response encryption key", e);

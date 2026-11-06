@@ -128,16 +128,9 @@ public class Oid4vpIdentityProviderEndpoint {
             @QueryParam(OAuth2Constants.ERROR) String error,
             @QueryParam(OAuth2Constants.ERROR_DESCRIPTION) String errorDescription) {
 
-        String message;
-        if (StringUtil.isNotBlank(error)) {
-            event.event(EventType.LOGIN_ERROR)
-                    .detail(OAuth2Constants.ERROR, error)
-                    .detail(OAuth2Constants.ERROR_DESCRIPTION, errorDescription)
-                    .error(Errors.IDENTITY_PROVIDER_ERROR);
-            message = error + (errorDescription != null ? ": " + errorDescription : "");
-        } else {
-            message = "No credential response received";
-        }
+        // Anyone can open this URL, so nothing from the query is shown or logged as an event: the
+        // POST that produced the redirect already recorded the reason.
+        String message = StringUtil.isNotBlank(error) ? userMessage(error) : "No credential response received";
 
         // Resolve the auth session from state so callback.error() can render Keycloak's error page.
         // callback.error() requires an active auth session in the KeycloakContext.
@@ -157,7 +150,7 @@ public class Oid4vpIdentityProviderEndpoint {
         } catch (Exception e) {
             LOG.warnf("Failed to render error page (auth session may have expired): %s", e.getMessage());
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("Authentication failed: " + error)
+                    .entity(message)
                     .type(MediaType.TEXT_PLAIN)
                     .build();
         }
@@ -184,6 +177,10 @@ public class Oid4vpIdentityProviderEndpoint {
                         resolvedRequest.state(), incomingPost.encryptedResponse(), resolvedRequest.requestContext());
             }
 
+            // Digital Credentials API requests are answered only through /dc-api/response.
+            if (FLOW_DC_API.equals(resolvedRequest.requestContext().flow())) {
+                return handleError("invalid_request", null, null);
+            }
             ResolvedSubmission submission = resolveSubmission(incomingPost, resolvedRequest);
             ensureEncryptedWhenRequired(submission.wasEncrypted());
 
@@ -487,12 +484,14 @@ public class Oid4vpIdentityProviderEndpoint {
 
     @GET
     @Path("/complete-auth")
-    public Response completeAuth(@QueryParam(PARAM_REQUEST_HANDLE) String requestHandle) {
+    public Response completeAuth(
+            @QueryParam(PARAM_REQUEST_HANDLE) String requestHandle,
+            @QueryParam(Oid4vpDirectPostService.PARAM_RESPONSE_CODE) String responseCode) {
         if (StringUtil.isBlank(requestHandle)) {
             return responseFactory.jsonErrorResponse(
                     Response.Status.BAD_REQUEST, "invalid_request", "Missing request handle parameter");
         }
-        return directPostService.completeAuth(requestHandle, callback, event);
+        return directPostService.completeAuth(requestHandle, responseCode, callback, event);
     }
 
     private Response processVpToken(
@@ -507,6 +506,10 @@ public class Oid4vpIdentityProviderEndpoint {
         try {
             BrokeredIdentityContext context =
                     provider.getCallbackProcessor().process(requestContext, vpToken, idToken, mdocGeneratedNonce);
+            // Single use: a verified response cannot be replayed to rewrite the stored identity.
+            if (!requestObjectStore.removeRequestContext(session, requestContext.state())) {
+                return handleError("invalid_request", null, null);
+            }
             return directPostService.storeAndSignal(
                     authSession, requestContext.requestHandle(), context, isCrossDeviceFlow);
         } catch (IdentityBrokerException e) {
@@ -520,22 +523,37 @@ public class Oid4vpIdentityProviderEndpoint {
     private Response handleError(String error, String errorDescription, String state) {
         event.event(EventType.LOGIN_ERROR)
                 .detail(OAuth2Constants.ERROR, error)
-                .detail(OAuth2Constants.ERROR_DESCRIPTION, errorDescription)
+                .detail(OAuth2Constants.ERROR_DESCRIPTION, truncate(errorDescription))
                 .error(Errors.IDENTITY_PROVIDER_ERROR);
 
         // Return a redirect_uri so the wallet can redirect the browser to the error page.
-        // The GET handler renders the error via callback.error().
-        // Include the state so the GET handler can resolve the auth session for Keycloak's error template.
-        return responseFactory.jsonRedirectResponse(
-                responseFactory.buildErrorRedirectUri(error, errorDescription, state));
+        // The GET handler renders the error via callback.error(). The reason stays in the event
+        // log: verification messages can carry fetch errors and internal details, so the wallet
+        // and the page get the error code only.
+        return responseFactory.jsonRedirectResponse(responseFactory.buildErrorRedirectUri(error, null, state));
+    }
+
+    private static String truncate(String value) {
+        return value != null && value.length() > 500 ? value.substring(0, 500) + "..." : value;
+    }
+
+    /** Fixed text for the error page; nothing from the request is shown to the user. */
+    static String userMessage(String error) {
+        if ("access_denied".equals(error)) {
+            return "Sign-in was cancelled in the wallet.";
+        }
+        if ("session_expired".equals(error)) {
+            return "The sign-in request expired. Please start again.";
+        }
+        return "Wallet sign-in failed. Please try again.";
     }
 
     private Response handleWalletError(String error, String errorDescription) {
         event.event(EventType.LOGIN_ERROR)
                 .detail(OAuth2Constants.ERROR, error)
-                .detail(OAuth2Constants.ERROR_DESCRIPTION, errorDescription)
+                .detail(OAuth2Constants.ERROR_DESCRIPTION, truncate(errorDescription))
                 .error(Errors.IDENTITY_PROVIDER_ERROR);
 
-        return responseFactory.jsonErrorResponse(Response.Status.OK, error, errorDescription);
+        return responseFactory.jsonErrorResponse(Response.Status.OK, error, null);
     }
 }
