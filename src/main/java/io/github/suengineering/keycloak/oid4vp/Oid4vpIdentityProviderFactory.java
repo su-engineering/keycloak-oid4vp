@@ -21,9 +21,11 @@ import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpClientIdScheme;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpSigningKeyParser;
+import io.github.suengineering.keycloak.oid4vp.verification.RegistrationCertificate;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -53,6 +55,7 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
 
     private static final Map<String, String> RESOLVED_KEY_CACHE = new ConcurrentHashMap<>();
     private static final Set<String> WARNED_UNCHECKED_TRUST_LISTS = ConcurrentHashMap.newKeySet();
+    private static final Set<String> WARNED_REGISTRATION_CERTIFICATES = ConcurrentHashMap.newKeySet();
     private static final Set<String> WARNED_MISSING_CERTIFICATE_BINDINGS = ConcurrentHashMap.newKeySet();
     private static final Set<String> WARNED_MISSING_LOTE_TYPES = ConcurrentHashMap.newKeySet();
 
@@ -199,7 +202,18 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
                 .property()
                 .name(Oid4vpIdentityProviderConfig.VERIFIER_INFO)
                 .label("Verifier Info (JSON)")
-                .helpText("JSON array of verifier attestations for EUDI Wallet registration certificates.")
+                .helpText("JSON array of verifier_info entries sent with every request. Use Registration "
+                        + "Certificate below for an EUDI Wallet registration certificate.")
+                .type(ProviderConfigProperty.TEXT_TYPE)
+                .add()
+                .property()
+                .name(Oid4vpIdentityProviderConfig.REGISTRATION_CERTIFICATE)
+                .label("Registration Certificate")
+                .helpText(
+                        "Wallet-relying party registration certificate (ETSI TS 119 475, a JWT of type rc-wrp+jwt) "
+                                + "from your registrar. It is sent in verifier_info with every request. At startup its "
+                                + "signature, expiry and binding to the X.509 access certificate are checked, and requests that "
+                                + "ask for unregistered credentials or claims are logged as warnings, because wallets refuse them.")
                 .type(ProviderConfigProperty.TEXT_TYPE)
                 .add()
                 .property()
@@ -413,6 +427,7 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
             validateHaipConfig(config);
             warnIfTrustListSignatureIsUnchecked(config);
             warnIfTrustListLoTETypeIsMissing(config);
+            warnIfRegistrationCertificateIsUnusable(config);
         }
 
         return new Oid4vpIdentityProvider(session, config);
@@ -448,6 +463,31 @@ public class Oid4vpIdentityProviderFactory extends AbstractIdentityProviderFacto
 
         config.getResolvedClientIdScheme()
                 .validateCertificateBinding(config.getX509CertificatePem(), config.isEnforceHaip());
+    }
+
+    private static void warnIfRegistrationCertificateIsUnusable(Oid4vpIdentityProviderConfig config) {
+        String registrationCertificate = config.getRegistrationCertificate();
+        if (registrationCertificate == null) {
+            return;
+        }
+        List<String> problems;
+        try {
+            X509Certificate accessCertificate = StringUtil.isBlank(config.getX509CertificatePem())
+                    ? null
+                    : PemUtils.decodeCertificates(config.getX509CertificatePem())[0];
+            problems =
+                    RegistrationCertificate.parse(registrationCertificate).problems(accessCertificate, Instant.now());
+        } catch (Exception e) {
+            problems = List.of("cannot be read: " + e.getMessage());
+        }
+        String warningKey = config.getAlias() + "|" + registrationCertificate.hashCode() + "|" + problems;
+        if (!problems.isEmpty() && WARNED_REGISTRATION_CERTIFICATES.add(warningKey)) {
+            for (String problem : problems) {
+                LOG.warnf(
+                        "OID4VP IdP '%s': the registration certificate %s. Wallets will refuse requests that carry it.",
+                        config.getAlias(), problem);
+            }
+        }
     }
 
     private static void warnIfTrustListSignatureIsUnchecked(Oid4vpIdentityProviderConfig config) {

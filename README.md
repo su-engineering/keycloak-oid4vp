@@ -23,6 +23,7 @@ Maintained by [su.engineering](https://su.engineering) · [Apache-2.0](LICENSE) 
 | **Credential formats** | SD-JWT VC (`dc+sd-jwt`) and mDoc (`mso_mdoc`). DID support applies to SD-JWT issuer verification. |
 | **Wallet interaction** | Same-device links, cross-device QR codes with status polling, and wallets in the same browser through the W3C Digital Credentials API, including ISO 18013-7 Annex C for Safari and Apple Wallet. |
 | **Presentation requests** | Multiple credentials per login, DCQL required/alternative sets and verified claim conditions; `direct_post`, `direct_post.jwt`, `dc_api` and `dc_api.jwt` responses. |
+| **Relying party certificates** | Requests are signed with the access certificate and carry the EUDI registration certificate in `verifier_info`; mismatches and over-asking are logged before wallets refuse them. |
 | **Keycloak integration** | Claim-to-user-attribute and claim-to-session-note mappers; optional transient users. |
 | **Login themes** | Neutral `su-engineering` and OpenKYC `openkyc`; select per realm. |
 

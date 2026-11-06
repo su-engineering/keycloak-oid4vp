@@ -100,11 +100,26 @@ This mode is intended for credentials that do not carry a stable account identif
 | `x509CertificatePem` | PEM-encoded verifier certificate material used for client ID derivation and request-object header material. | *(required for x509 schemes)* |
 | `x509SigningKeyJwk` | Explicit signing JWK override. Normally derived automatically. | *(auto-derived)* |
 | `verifierInfo` | JSON value for the request object's `verifier_info` claim. | *(none)* |
+| `registrationCertificate` | EUDI Wallet relying party registration certificate (`rc-wrp+jwt`). Added to `verifier_info` in every request. See [Relying party certificates](#relying-party-certificates). | *(none)* |
 
 `x509CertificatePem` supports two practical layouts:
 
 1. Combined PEM with leaf certificate, optional intermediate certificates, and private key.
 2. Certificate-only PEM when request objects should be signed with the Keycloak realm signing key instead.
+
+#### Relying party certificates
+
+EUDI Wallets expect two certificates from a relying party (ARF Topic 44, ETSI TS 119 411-8 and TS 119 475):
+
+- The **access certificate** (WRPAC) signs the request. It is the leaf of `x509CertificatePem`, sent in the request object's `x5c` header.
+- The **registration certificate** (WRPRC) describes what the relying party registered to ask for. Paste the JWT from your registrar into `registrationCertificate`; it is sent with every request (redirect flows and the Digital Credentials API) as `verifier_info` entry `{"format": "registration_cert", "data": "<base64url of the JWT>"}`. If `verifierInfo` already contains a `registration_cert` entry, that entry is used instead.
+
+Wallets refuse requests whose certificates do not fit together, so Keycloak runs the same checks and logs a warning for each problem:
+
+- at startup: the JWT type is `rc-wrp+jwt`, its signature verifies with its `x5c` leaf, it has not expired, its `sub` (or `act.sub` for an intermediary) equals the access certificate's `organizationIdentifier`, and its `serviceIdentifier` equals the access certificate's `organizationalUnit`;
+- when a request is built: every credential type and claim the DCQL query asks for is registered in the certificate's `credentials` (a registered parent path such as `address` covers `address.street_address`). Anything else is over-asking (ARF RPRC_21).
+
+Keycloak does not check the registrar's trust chain or revocation status of either certificate; wallets do that against their trusted lists.
 
 ### Trust and Verification
 
