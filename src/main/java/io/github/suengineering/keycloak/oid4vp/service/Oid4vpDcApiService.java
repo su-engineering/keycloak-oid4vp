@@ -33,13 +33,21 @@ import io.github.suengineering.keycloak.oid4vp.domain.RequestObjectParams;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpAuthSessionResolver;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpRequestObjectStore;
 import io.github.suengineering.keycloak.oid4vp.util.Oid4vpResponseDecryptor;
+import io.github.suengineering.keycloak.oid4vp.util.Oid4vpSigningKeyParser;
+import io.github.suengineering.keycloak.oid4vp.verification.IsoMdocDcApi;
 import java.net.URI;
+import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPrivateKey;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityBrokerException;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
@@ -56,7 +64,9 @@ import org.keycloak.utils.StringUtil;
 public class Oid4vpDcApiService {
 
     /** Upper bound for the JSON the page posts back; a presentation response is far smaller. */
-    static final int MAX_RESPONSE_CHARS = 1024 * 1024;
+    static final int MAX_RESPONSE_CHARS = 3 * 1024 * 1024;
+
+    private static final Logger LOG = Logger.getLogger(Oid4vpDcApiService.class);
 
     private static final ObjectMapper STRICT_JSON = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
@@ -82,7 +92,7 @@ public class Oid4vpDcApiService {
     }
 
     /** A request the page passes to {@code navigator.credentials.get()}, plus the state to post back. */
-    public record DcApiRequest(String state, Map<String, Object> request) {}
+    public record DcApiRequest(String state, List<Map<String, Object>> requests) {}
 
     /** The outcome of a posted response: a verified identity, or the wallet's own error. */
     public record DcApiResult(
@@ -139,7 +149,9 @@ public class Oid4vpDcApiService {
                 dcql.configuredCredentialTypes(),
                 dcql.dcqlQuery(),
                 config.getIdentityCredentialId(),
-                origin);
+                origin,
+                null,
+                null);
 
         Map<String, Object> request = provider.getRedirectFlowService()
                 .buildDcApiRequest(
@@ -159,8 +171,67 @@ public class Oid4vpDcApiService {
                                 false,
                                 config.isEnforceHaip()),
                         origin);
+        List<Map<String, Object>> requests = new ArrayList<>();
+        requests.add(request);
+
+        // Offer ISO/IEC 18013-7 Annex C next to OpenID4VP; the browser or wallet picks one.
+        if (config.isDcApiIsoMdocEnabled()
+                && !IsoMdocDcApi.docQueries(dcql.dcqlQuery()).isEmpty()) {
+            IsoMdocDcApi.PreparedRequest iso = IsoMdocDcApi.prepare(dcql.dcqlQuery(), origin, readerKey(config));
+            requestContext = new Oid4vpRequestObjectStore.RequestContextEntry(
+                    requestContext.requestHandle(),
+                    requestContext.rootSessionId(),
+                    requestContext.tabId(),
+                    requestContext.state(),
+                    requestContext.effectiveClientId(),
+                    null,
+                    FLOW_DC_API,
+                    requestContext.nonce(),
+                    requestContext.encryptionKeyJson(),
+                    requestContext.encryptionJwkThumbprint(),
+                    requestContext.configuredCredentialTypes(),
+                    requestContext.dcqlQuery(),
+                    requestContext.identityCredentialId(),
+                    origin,
+                    iso.encryptionInfo(),
+                    iso.recipientKeyJson());
+            Map<String, Object> isoRequest = new LinkedHashMap<>();
+            isoRequest.put("protocol", IsoMdocDcApi.PROTOCOL);
+            isoRequest.put(
+                    "data", Map.of("deviceRequest", iso.deviceRequest(), "encryptionInfo", iso.encryptionInfo()));
+            requests.add(isoRequest);
+        }
+
         requestObjectStore.storeRequestContext(session, requestContext);
-        return new DcApiRequest(state, request);
+        return new DcApiRequest(state, requests);
+    }
+
+    /**
+     * The verifier key that signs ISO requests ({@code readerAuthAll}), or {@code null} for an
+     * unsigned request. Apple Wallet only answers signed requests.
+     */
+    private static IsoMdocDcApi.ReaderKey readerKey(Oid4vpIdentityProviderConfig config) {
+        if (StringUtil.isBlank(config.getX509SigningKeyJwk()) || StringUtil.isBlank(config.getX509CertificatePem())) {
+            return null;
+        }
+        try {
+            KeyWrapper key = Oid4vpSigningKeyParser.parse(config.getX509SigningKeyJwk());
+            List<X509Certificate> chain = key.getCertificateChain() != null
+                            && !key.getCertificateChain().isEmpty()
+                    ? key.getCertificateChain()
+                    : key.getCertificate() != null ? List.of(key.getCertificate()) : List.of();
+            if (chain.isEmpty()
+                    || !(key.getPrivateKey() instanceof ECPrivateKey ecKey)
+                    || ecKey.getParams().getCurve().getField().getFieldSize() != 256) {
+                LOG.debugf(
+                        "ISO mdoc request stays unsigned: reader authentication needs a P-256 key with a certificate");
+                return null;
+            }
+            return new IsoMdocDcApi.ReaderKey((java.security.PrivateKey) key.getPrivateKey(), chain);
+        } catch (Exception e) {
+            LOG.warnf("ISO mdoc request stays unsigned: %s", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -169,6 +240,11 @@ public class Oid4vpDcApiService {
      * and {@link IdentityBrokerException} when the presentation does not verify.
      */
     public DcApiResult handleResponse(String requestHandle, String state, String responseData) {
+        return handleResponse(requestHandle, state, null, responseData);
+    }
+
+    /** As {@link #handleResponse(String, String, String)}, for the protocol the browser reports. */
+    public DcApiResult handleResponse(String requestHandle, String state, String protocol, String responseData) {
         Oid4vpRequestObjectStore.FlowContextEntry flow = requireFlow(requestHandle);
         AuthenticationSessionModel authSession = requireBrowserSession(flow);
 
@@ -187,11 +263,38 @@ public class Oid4vpDcApiService {
                     authSession, requestContext, null, walletError, text(data, OAuth2Constants.ERROR_DESCRIPTION));
         }
 
-        String vpToken = extractVpToken(data, requestContext);
-        BrokeredIdentityContext identity = provider.getCallbackProcessor().process(requestContext, vpToken, null, null);
+        boolean isoMdoc = IsoMdocDcApi.PROTOCOL.equals(protocol);
+        if (isoMdoc && StringUtil.isBlank(requestContext.isoEncryptionInfo())) {
+            throw new IdentityBrokerException("No org-iso-mdoc request was made for this flow.");
+        }
+        Oid4vpRequestObjectStore.RequestContextEntry verificationContext =
+                isoMdoc ? requestContext : requestContext.withoutIsoMdoc();
+        String vpToken = isoMdoc ? extractIsoVpToken(data, requestContext) : extractVpToken(data, requestContext);
+        BrokeredIdentityContext identity =
+                provider.getCallbackProcessor().process(verificationContext, vpToken, null, null);
         // The nonce is single-use: a verified response cannot be posted a second time.
         requestObjectStore.removeRequestContext(session, requestContext.state());
         return new DcApiResult(authSession, requestContext, identity, null, null);
+    }
+
+    private String extractIsoVpToken(JsonNode data, Oid4vpRequestObjectStore.RequestContextEntry requestContext) {
+        JsonNode response = data.get(RESPONSE);
+        if (response == null || !response.isTextual()) {
+            throw new IdentityBrokerException("Missing org-iso-mdoc response");
+        }
+        try {
+            Map<String, List<String>> presentations = IsoMdocDcApi.openResponse(
+                    response.textValue(),
+                    new IsoMdocDcApi.PreparedRequest(
+                            null, requestContext.isoEncryptionInfo(), requestContext.isoRecipientKeyJson()),
+                    requestContext.origin(),
+                    IsoMdocDcApi.docQueries(requestContext.dcqlQuery()));
+            return STRICT_JSON.writeValueAsString(presentations);
+        } catch (IllegalArgumentException e) {
+            throw new IdentityBrokerException(e.getMessage(), e);
+        } catch (Exception e) {
+            throw new IdentityBrokerException("Unreadable org-iso-mdoc response", e);
+        }
     }
 
     private String extractVpToken(JsonNode data, Oid4vpRequestObjectStore.RequestContextEntry requestContext) {
@@ -301,11 +404,11 @@ public class Oid4vpDcApiService {
         return StringUtil.isBlank(tabId) ? UUID.randomUUID().toString() : tabId + "." + UUID.randomUUID();
     }
 
-    /** Serializes the request for the page. */
+    /** Serializes the request for the page: {@code {state, requests: [{protocol, data}, ...]}}. */
     public static Map<String, Object> toPageJson(DcApiRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(OAuth2Constants.STATE, request.state());
-        body.putAll(request.request());
+        body.put("requests", request.requests());
         return body;
     }
 }

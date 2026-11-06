@@ -1,6 +1,7 @@
 /* Copyright 2026 su-engineering. SPDX-License-Identifier: Apache-2.0 */
 // Signs in with a wallet in this browser through the W3C Digital Credentials API
-// (OpenID4VP 1.0 Appendix A). The button stays hidden in browsers without the API.
+// (OpenID4VP 1.0 Appendix A, and ISO/IEC 18013-7 Annex C for mdoc).
+// The button stays hidden in browsers without the API.
 (function() {
     function parseConfig(root) {
         if (!root) {
@@ -71,13 +72,15 @@
 
         function present() {
             return post(config.requestUrl, { request_handle: config.requestHandle }).then(function(created) {
-                if (!created.ok || !created.body.protocol) {
+                if (!created.ok || !Array.isArray(created.body.requests) || !created.body.requests.length) {
                     throw failure(created.body);
                 }
                 var request = created.body;
+                // One request per protocol (OpenID4VP, and ISO mdoc when the query allows it);
+                // the browser and wallet choose which one to answer.
                 return navigator.credentials.get({
                     mediation: "required",
-                    digital: { requests: [{ protocol: request.protocol, data: request.data }] }
+                    digital: { requests: request.requests }
                 }).then(function(credential) {
                     if (!credential || credential.data === undefined || credential.data === null) {
                         throw failure({ error: "no_credential" });
@@ -86,6 +89,7 @@
                     return post(config.responseUrl, {
                         request_handle: config.requestHandle,
                         state: request.state,
+                        protocol: credential.protocol || "",
                         response: data
                     });
                 });

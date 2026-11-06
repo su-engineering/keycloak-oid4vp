@@ -84,21 +84,27 @@ public class Oid4vpCallbackProcessor {
 
         LOG.debugf("VP token received (length=%d)", vpToken.length());
 
-        VpTokenProcessor.Request verificationRequest = StringUtil.isNotBlank(requestContext.origin())
-                ? VpTokenProcessor.Request.forDcApi(
+        VpTokenProcessor.Request verificationRequest = StringUtil.isNotBlank(requestContext.isoEncryptionInfo())
+                ? VpTokenProcessor.Request.forIsoDcApi(
                         vpToken,
                         requestContext.origin(),
-                        requestContext.nonce(),
-                        requestContext.encryptionJwkThumbprint(),
+                        requestContext.isoEncryptionInfo(),
                         requestContext.dcqlQuery())
-                : new VpTokenProcessor.Request(
-                        vpToken,
-                        requestContext.effectiveClientId(),
-                        requestContext.nonce(),
-                        requestContext.responseUri(),
-                        mdocGeneratedNonce,
-                        requestContext.encryptionJwkThumbprint(),
-                        requestContext.dcqlQuery());
+                : StringUtil.isNotBlank(requestContext.origin())
+                        ? VpTokenProcessor.Request.forDcApi(
+                                vpToken,
+                                requestContext.origin(),
+                                requestContext.nonce(),
+                                requestContext.encryptionJwkThumbprint(),
+                                requestContext.dcqlQuery())
+                        : new VpTokenProcessor.Request(
+                                vpToken,
+                                requestContext.effectiveClientId(),
+                                requestContext.nonce(),
+                                requestContext.responseUri(),
+                                mdocGeneratedNonce,
+                                requestContext.encryptionJwkThumbprint(),
+                                requestContext.dcqlQuery());
         VpTokenResult vpResult = vpTokenProcessor.process(verificationRequest);
 
         VerifiedCredential primary = vpResult.getPrimaryCredential();

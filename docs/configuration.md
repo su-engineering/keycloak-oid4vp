@@ -88,6 +88,7 @@ This mode is intended for credentials that do not carry a stable account identif
 | `sameDeviceEnabled` | Enables same-device wallet login. | `true` |
 | `crossDeviceEnabled` | Enables cross-device QR-code wallet login. | `true` |
 | `dcApiEnabled` | Offers a wallet in the same browser through the W3C Digital Credentials API. See [Digital Credentials API](#digital-credentials-api). | `false` |
+| `dcApiIsoMdocEnabled` | Also offers ISO/IEC 18013-7 Annex C (`org-iso-mdoc`) in that flow when the query is mdoc only. | `true` |
 | `walletScheme` | URI scheme used to invoke the wallet app. | `openid4vp://` |
 | `responseMode` | Wallet callback response mode: `direct_post` or `direct_post.jwt`. | `direct_post` |
 
@@ -167,6 +168,14 @@ With `dcApiEnabled=true` the login page loads `oid4vp-dc-api.js`, which shows "U
 | `responseMode=direct_post` | `response_mode=dc_api` |
 
 `expected_origins` and the presentation binding use the origin of Keycloak's front-end URL, so the login page must be served from that origin (set `hostname` when Keycloak runs behind a proxy). The wallet binds every presentation to that origin: the SD-JWT key binding JWT `aud` must be `origin:<origin>`, and mDoc device authentication must use the `OpenID4VPDCAPIHandover` transcript. A presentation made for a redirect flow, or for another site, is rejected.
+
+#### ISO mdoc (Safari and Apple Wallet)
+
+Safari and Apple Wallet answer only ISO/IEC 18013-7 Annex C (`org-iso-mdoc`). When `dcApiIsoMdocEnabled` is on and every DCQL credential query is `mso_mdoc` with its own `doctype_value` and `[namespace, element]` claim paths, the page offers an ISO request next to the OpenID4VP one and the browser or wallet picks one.
+
+- The response is always encrypted with HPKE to a key made for that request, and the encryption is bound to the Keycloak origin. The mdoc is then verified like any other: issuer chain against the trust list, digests, validity, revocation, and device authentication over the Annex C session transcript.
+- With `x509SigningKeyJwk` and `x509CertificatePem` set to a P-256 key, the DeviceRequest is version 1.1 and signed with `readerAuthAll` (ES256, certificate chain in `x5chain`). Apple Wallet only answers signed requests, and the certificate has to come from Apple Business Connect. Without such a key the request is an unsigned version 1.0 DeviceRequest.
+- DCQL `credential_sets` become DeviceRequest use cases. Claim `values` are not sent to the wallet, but they are still checked on the response.
 
 The flow is not offered while `useIdTokenSubject` is on, because the browser API returns no SIOP ID token. Trust lists, status lists, issuer allowlists and mappers apply as in the redirect flows.
 

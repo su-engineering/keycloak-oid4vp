@@ -420,7 +420,7 @@ public class Oid4vpIdentityProviderEndpoint {
 
     /**
      * Creates a Digital Credentials API request for the login page to pass to
-     * {@code navigator.credentials.get()}. Answers {@code {state, protocol, data}}.
+     * {@code navigator.credentials.get()}. Answers {@code {state, requests: [{protocol, data}, ...]}}.
      */
     @POST
     @Path("/dc-api/request")
@@ -455,12 +455,14 @@ public class Oid4vpIdentityProviderEndpoint {
     public Response handleDcApiResponse(
             @FormParam(PARAM_REQUEST_HANDLE) String requestHandle,
             @FormParam(OAuth2Constants.STATE) String state,
+            @FormParam("protocol") String protocol,
             @FormParam(RESPONSE) String responseData) {
         if (!provider.getConfig().isDcApiEnabled()) {
             return responseFactory.jsonErrorResponse(Response.Status.NOT_FOUND, "not_found", null);
         }
         try {
-            Oid4vpDcApiService.DcApiResult result = dcApiService.handleResponse(requestHandle, state, responseData);
+            Oid4vpDcApiService.DcApiResult result =
+                    dcApiService.handleResponse(requestHandle, state, protocol, responseData);
             if (result.walletError() != null) {
                 return handleError(result.walletError(), result.walletErrorDescription(), state);
             }
