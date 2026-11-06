@@ -81,13 +81,17 @@ public final class X5cChainValidator {
     }
 
     static PublicKey validateChain(List<String> x5c, List<X509Certificate> trustedCertificates) throws Exception {
+        return validateCertChain(parseChain(x5c), trustedCertificates);
+    }
+
+    static List<X509Certificate> parseChain(List<String> x5c) throws Exception {
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         List<X509Certificate> chain = new ArrayList<>();
         for (String certB64 : x5c) {
             byte[] certDer = Base64.getMimeDecoder().decode(certB64);
             chain.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certDer)));
         }
-        return validateCertChain(chain, trustedCertificates);
+        return chain;
     }
 
     static PublicKey validateCertChain(List<X509Certificate> chain, List<X509Certificate> trustedCertificates)

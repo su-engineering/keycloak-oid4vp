@@ -180,18 +180,12 @@ public class SdJwtVerifier {
             }
         }
 
+        // A presented x5c decides on its own: when it does not validate, is revoked, or does not
+        // name the issuer, no fallback may verify the credential another way.
         IllegalStateException x5cFailure = null;
-        try {
-            List<SignatureVerifierContext> x5cVerifiers = resolveIssuerVerifiersFromX5c(sdJwtVP, trustedCertificates);
-            if (x5cVerifiers != null) {
-                return x5cVerifiers;
-            }
-        } catch (IllegalStateException e) {
-            x5cFailure = e;
-            if (strictX5cVerification) {
-                throw e;
-            }
-            LOG.debugf("x5c-based SD-JWT verification unavailable, trying fallback mechanisms: %s", e.getMessage());
+        List<SignatureVerifierContext> x5cVerifiers = resolveIssuerVerifiersFromX5c(sdJwtVP, trustedCertificates);
+        if (x5cVerifiers != null) {
+            return x5cVerifiers;
         }
 
         if (issuerMetadataResolver != null) {
@@ -214,11 +208,17 @@ public class SdJwtVerifier {
             throw new IllegalStateException("No trusted keys available for SD-JWT signature verification");
         }
 
-        // Final fallback: try all trusted certificate keys directly (for self-signed or direct trust)
+        // Final fallback: a currently valid trusted certificate that itself names the issuer signs directly.
         LOG.debug("Using trusted certificate keys directly for signature verification");
         List<SignatureVerifierContext> verifiers = new ArrayList<>();
-        for (X509Certificate cert : trustedCertificates) {
-            verifiers.add(toVerifierContext(cert.getPublicKey()));
+        for (X509Certificate cert : X5cChainValidator.currentlyValid(trustedCertificates)) {
+            if (IssuerCertificateBinding.names(cert, issuer)) {
+                verifiers.add(toVerifierContext(cert.getPublicKey()));
+            }
+        }
+        if (verifiers.isEmpty()) {
+            if (x5cFailure != null) throw x5cFailure;
+            throw new IllegalStateException("No trusted certificate names issuer " + issuer);
         }
         return verifiers;
     }
@@ -237,9 +237,16 @@ public class SdJwtVerifier {
             throw new IllegalStateException("No trusted keys available for SD-JWT x5c signature verification");
         }
         try {
-            PublicKey leafKey = X5cChainValidator.validateChain(x5c, trustedCertificates);
+            List<X509Certificate> chain = X5cChainValidator.parseChain(x5c);
+            X5cChainValidator.AnchoredChain anchored = X5cChainValidator.anchorChain(chain, trustedCertificates);
+            // SD-JWT VC: the issuer certificate must name the iss value (SAN URI or DNS name).
+            String issuer = extractIssuer(sdJwtVP);
+            if (!IssuerCertificateBinding.names(chain.get(0), issuer)) {
+                throw new IllegalStateException("x5c leaf certificate does not name issuer " + issuer);
+            }
+            revocationChecker.check(anchored);
             LOG.debug("SD-JWT x5c chain validated against trust list, using leaf certificate key");
-            return List.of(toVerifierContext(leafKey));
+            return List.of(toVerifierContext(anchored.leafKey()));
         } catch (Exception e) {
             throw new IllegalStateException("SD-JWT x5c validation failed: " + e.getMessage(), e);
         }

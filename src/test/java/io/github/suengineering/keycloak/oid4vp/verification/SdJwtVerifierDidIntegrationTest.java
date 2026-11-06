@@ -515,6 +515,15 @@ class SdJwtVerifierDidIntegrationTest {
                 publicKey);
         certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
 
+        certBuilder.addExtension(
+                org.bouncycastle.asn1.x509.Extension.subjectAlternativeName,
+                false,
+                new org.bouncycastle.asn1.x509.GeneralNames(new org.bouncycastle.asn1.x509.GeneralName[] {
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.uniformResourceIdentifier, "https://issuer.example"),
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.dNSName, "issuer.example")
+                }));
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(ecKey.toECPrivateKey());
 
         return new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
@@ -532,6 +541,15 @@ class SdJwtVerifierDidIntegrationTest {
                 subjectKey.toECPublicKey());
         certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(false));
 
+        certBuilder.addExtension(
+                org.bouncycastle.asn1.x509.Extension.subjectAlternativeName,
+                false,
+                new org.bouncycastle.asn1.x509.GeneralNames(new org.bouncycastle.asn1.x509.GeneralName[] {
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.uniformResourceIdentifier, "https://issuer.example"),
+                    new org.bouncycastle.asn1.x509.GeneralName(
+                            org.bouncycastle.asn1.x509.GeneralName.dNSName, "issuer.example")
+                }));
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(caKey.toECPrivateKey());
 
         return new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
