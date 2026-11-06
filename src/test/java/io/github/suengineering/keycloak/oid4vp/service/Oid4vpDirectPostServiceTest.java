@@ -347,6 +347,7 @@ class Oid4vpDirectPostServiceTest {
         RealmModel realmModel = mock(RealmModel.class);
         org.keycloak.models.UserProvider users = mock(org.keycloak.models.UserProvider.class);
         org.keycloak.models.UserModel user = mock(org.keycloak.models.UserModel.class);
+        when(user.getFirstAttribute("oid4vp.issuerScope.oid4vp")).thenReturn("scope-hash");
         when(keycloakSession.users()).thenReturn(users);
         when(users.getUserByFederatedIdentity(
                         eq(realmModel),
@@ -354,8 +355,14 @@ class Oid4vpDirectPostServiceTest {
                                 identity -> identity != null && "legacy".equals(identity.getUserId()))))
                 .thenReturn(user);
 
+        // Another issuer presenting the same identifier does not get the account.
         assertThat(Oid4vpDirectPostService.moveLegacyLink(
-                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy"))
+                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy", "other-issuer-hash"))
+                .isFalse();
+        verify(users, org.mockito.Mockito.never()).removeFederatedIdentity(any(), any(), anyString());
+
+        assertThat(Oid4vpDirectPostService.moveLegacyLink(
+                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy", "scope-hash"))
                 .isTrue();
         verify(users).removeFederatedIdentity(realmModel, user, "oid4vp");
         verify(users)
@@ -374,7 +381,7 @@ class Oid4vpDirectPostServiceTest {
                 .thenReturn(mock(org.keycloak.models.UserModel.class));
 
         assertThat(Oid4vpDirectPostService.moveLegacyLink(
-                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy"))
+                        keycloakSession, realmModel, "oid4vp", "scoped", "alice", "legacy", "scope-hash"))
                 .isFalse();
         verify(users, org.mockito.Mockito.never()).removeFederatedIdentity(any(), any(), anyString());
     }

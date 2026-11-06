@@ -42,9 +42,8 @@ final class IssuerCertificateBinding {
         } catch (IllegalArgumentException e) {
             return false;
         }
-        if (!"https".equalsIgnoreCase(issuerUri.getScheme()) || issuerUri.getHost() == null) {
-            return false;
-        }
+        // SD-JWT VC: an https iss may match a dNSName (its host); any iss may match a URI SAN exactly.
+        boolean https = "https".equalsIgnoreCase(issuerUri.getScheme()) && issuerUri.getHost() != null;
         Collection<List<?>> names;
         try {
             names = certificate.getSubjectAlternativeNames();
@@ -52,13 +51,13 @@ final class IssuerCertificateBinding {
             return false;
         }
         if (names == null) return false;
-        String host = issuerUri.getHost().toLowerCase(Locale.ROOT);
+        String host = https ? issuerUri.getHost().toLowerCase(Locale.ROOT) : null;
         for (List<?> name : names) {
             if (name.size() < 2 || !(name.get(0) instanceof Integer type) || !(name.get(1) instanceof String value)) {
                 continue;
             }
             if (type == SAN_URI && sameUri(value, issuer)) return true;
-            if (type == SAN_DNS && host.equals(value.toLowerCase(Locale.ROOT))) return true;
+            if (type == SAN_DNS && host != null && host.equals(value.toLowerCase(Locale.ROOT))) return true;
         }
         return false;
     }

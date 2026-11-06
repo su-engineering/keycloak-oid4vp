@@ -63,6 +63,7 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
     public static final String DC_API_ORIGIN = "dcApiOrigin";
     public static final String ALLOW_PRIVATE_NETWORK_FETCH = "allowPrivateNetworkFetch";
     public static final String IDENTITY_KEY_SCOPE = "identityKeyScope";
+    public static final String X5C_ISSUER_BINDING = "x5cIssuerBinding";
     public static final String WALLET_SCHEME = "walletScheme";
 
     public static final String CLIENT_ID_SCHEME = "clientIdScheme";
@@ -198,6 +199,11 @@ public class Oid4vpIdentityProviderConfig extends IdentityProviderModel implemen
 
     public void setDcApiEnabled(boolean enabled) {
         getConfig().put(DC_API_ENABLED, String.valueOf(enabled));
+    }
+
+    /** Whether an SD-JWT issuer certificate must name the iss value (SD-JWT VC). */
+    public boolean isX5cIssuerBinding() {
+        return getBoolConfig(X5C_ISSUER_BINDING, true);
     }
 
     @Override

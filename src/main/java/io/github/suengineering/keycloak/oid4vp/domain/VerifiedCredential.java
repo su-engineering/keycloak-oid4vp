@@ -60,6 +60,11 @@ public record VerifiedCredential(
         return sha256(normalize(issuerScope) + "\n" + normalizedSubject);
     }
 
+    /** A hash of {@link #issuerScope()}, recorded on users to bind later identity-key migration. */
+    public String issuerScopeHash() {
+        return issuerScope == null ? null : sha256(issuerScope);
+    }
+
     private static String sha256(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance(JavaAlgorithm.SHA256);

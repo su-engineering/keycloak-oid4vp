@@ -169,6 +169,9 @@ public final class Oid4vpTestKeycloakSetup {
         config.put(Oid4vpIdentityProviderConfig.STATUS_LIST_MAX_CACHE_TTL_SECONDS, "0");
         // The test wallets serve status lists and metadata from the Docker network.
         config.put(Oid4vpIdentityProviderConfig.ALLOW_PRIVATE_NETWORK_FETCH, "true");
+        // The oid4vc-dev v1.8 wallet signs SD-JWTs with certificates that do not name the issuer.
+        // The Digital Credentials API suite uses the newer eudi-dev wallet with binding on.
+        config.put(Oid4vpIdentityProviderConfig.X5C_ISSUER_BINDING, "false");
         config.put(Oid4vpIdentityProviderConfig.X509_CERTIFICATE_PEM, spec.x509CertPem());
         if (spec.clientIdScheme() != null) {
             config.put(Oid4vpIdentityProviderConfig.CLIENT_ID_SCHEME, spec.clientIdScheme());

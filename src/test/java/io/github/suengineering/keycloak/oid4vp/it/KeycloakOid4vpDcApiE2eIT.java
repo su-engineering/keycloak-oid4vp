@@ -93,6 +93,7 @@ class KeycloakOid4vpDcApiE2eIT extends AbstractOid4vpE2eTest {
         idpConfig
                 .set(Oid4vpIdentityProviderConfig.DC_API_ENABLED, "true")
                 .set(Oid4vpIdentityProviderConfig.DC_API_ORIGIN, pageOrigin())
+                .set(Oid4vpIdentityProviderConfig.X5C_ISSUER_BINDING, "true")
                 .set(Oid4vpIdentityProviderConfig.TRUST_LIST_URL, DC_API_WALLET_INTERNAL_URL + "/api/trustlists/pid")
                 .set(Oid4vpIdentityProviderConfig.TRUST_LIST_SIGNING_CERT_PEM, trustListSigningCertPem)
                 .set(Oid4vpIdentityProviderConfig.USER_MAPPING_CLAIM, "family_name")
