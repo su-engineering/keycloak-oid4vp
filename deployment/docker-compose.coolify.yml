@@ -14,17 +14,16 @@ services:
       KC_DB: postgres
       KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak}
       KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
-      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
-      KC_HOSTNAME: ${SERVICE_FQDN_KEYCLOAK:-localhost}
-      KC_HOSTNAME_URL: ${SERVICE_URL_KEYCLOAK:-http://localhost:8080}
-      KC_HOSTNAME_ADMIN_URL: ${SERVICE_URL_KEYCLOAK:-http://localhost:8080}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:?set KC_DB_PASSWORD}
+      KC_HOSTNAME: ${SERVICE_URL_KEYCLOAK:-http://localhost:8080}
+      KC_HOSTNAME_ADMIN: ${SERVICE_URL_KEYCLOAK:-http://localhost:8080}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
       SERVICE_FQDN_KEYCLOAK_8080:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD}
     command: ["start", "--optimized", "--import-realm"]
     depends_on:
       postgres:
@@ -47,7 +46,7 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: ${KC_DB_USERNAME:-keycloak}
-      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:?set KC_DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

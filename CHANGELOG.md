@@ -1,7 +1,25 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-06)
 
+- Add `identityKeyScope`. With the default `subject`, users are matched by the identifier claim alone, as before. With `issuer`, the identity key also covers the credential's issuer (SD-JWT `iss`, or for mDoc the docType and the issuer of the document signer certificate), so equal identifiers from different issuers reach different accounts. Every login now records a hash of the issuer on the user; after switching to `issuer`, an existing account link moves to the new key only when the presenting credential comes from that recorded issuer. Run this version with `subject` first so issuers get recorded, or accounts without a record are not migrated automatically.
+- **Breaking:** an SD-JWT issuer certificate (`x5c` leaf) must name the `iss` value as a subjectAltName URI, or the `iss` host as a dNSName. A presented `x5c` is final: when it does not validate it no longer falls back to issuer metadata or trusted keys, and the direct-trust fallback only uses currently valid trusted certificates that name the issuer. `x5cIssuerBinding=false` turns the naming requirement off for issuers whose certificates do not carry their identifier yet.
+- **Breaking:** the Digital Credentials API flow takes its origin from the new `dcApiOrigin` setting or the realm Frontend URL, never from request headers. Without either, the button is not offered.
+- **Breaking:** status list, did:web, did:webvh and issuer metadata URLs taken from credentials are not fetched from loopback, private, link-local or similar addresses unless the new `allowPrivateNetworkFetch` setting is on. Configured trust list and VICAL URLs are unaffected.
+- mDoc claims are read only from `issuerSigned.nameSpaces`, the tag-24 items whose digests are checked against the MSO.
+- SD-JWT issuer chains from `x5c` are now checked by `certificateRevocationCheck` like the other issuer chains.
+- The issuer allowlist is applied before any key, DID document or status list is fetched for a credential.
+- Same-device and Digital Credentials API completions carry a one-time `response_code` that `/complete-auth` requires. Request contexts are single-use, the pending identity is stored per flow, and `direct_post` no longer accepts Digital Credentials API requests.
+- Wallet error responses and error pages no longer include error descriptions; the reason is recorded in Keycloak's event log and the page shows a fixed message. Error redirect URLs are encoded without URI templates.
+- `x509CertificatePem` and `x509SigningKeyJwk` accept `${vault.<name>}` references resolved through Keycloak's vault, so the verifier private key does not have to be stored in the identity provider configuration.
+- A `status_list` reference that cannot be read, or that has a negative or oversized index, now rejects the credential.
+- Untrusted CBOR is checked for nesting depth and length before decoding.
+- Issuer chain validation enforces name chaining, `keyCertSign` and path length constraints.
+- Trust list, VICAL, status list and issuer metadata caches are keyed by the settings that verified them and are bounded in size. A VICAL is not used past its `notAfter`, and unreadable VICAL dates are rejected.
+- A national trusted list past its `NextUpdate` is skipped instead of expiring every list loaded from the LOTL.
+- OCSP answers without `nextUpdate` are accepted for one hour, and delta or partitioned CRLs are not used as complete revocation lists.
+- `didWebLegacyPathLayout` applies the same host and path checks as the standard layout.
+- The response encryption key is no longer written to TRACE logs.
 - Add `certificateRevocationCheck` (`none`, `soft`, `strict`) to check SD-JWT and mDoc issuer certificate chains for revocation below the trust anchor: OCSP from the authority information access extension first, then CRL distribution points. Responses must be signed by the issuing CA or its delegated OCSP responder and be current. `soft` accepts certificates whose status cannot be determined, `strict` rejects them.
 - Accept ETSI TS 119 612 XML trusted lists and the EU list of trusted lists (LOTL) as the trust list. The XAdES enveloped signature must cover the whole document and verify with a certificate anchored in `trustListSigningCertPem`; a LOTL is followed to the national lists, each verified with the certificates the LOTL names for it, optionally limited by `trustListTerritories`. Only granted services of the types in the new `trustListServiceTypes` setting become trust anchors; no type is accepted by default.
 - Add `registrationCertificate` for the EUDI Wallet relying party registration certificate (ETSI TS 119 475, `rc-wrp+jwt`). It is sent in `verifier_info` with every request as a `registration_cert` entry. At startup Keycloak logs a warning when its type, signature or expiry is wrong or when it is not bound to the access certificate (`organizationIdentifier` and `organizationalUnit`), and it warns when the DCQL query asks for credentials or claims the certificate does not register (ARF RPRC_21).
@@ -15,7 +33,7 @@
 - **Breaking:** did:web key authorization. The DID document `id` must equal the DID, only `assertionMethod` keys controlled by the DID may sign credentials, and a JOSE `kid` must name one of them.
 - **Breaking:** did:web URLs follow the did:web specification. Path DIDs resolve to `<path>/did.json` and encoded ports (`%3A`) stay in the host. Set `didWebLegacyPathLayout=true` to keep the previous `<path>/.well-known/did.json` layout. DID documents are capped at 256 KiB.
 - **Breaking:** a configured trust list must be signed. Without `trustListSigningCertPem` the trust list is now rejected instead of being trusted as fetched. The new `trustListAllowUnsigned` option restores the old behaviour for local testing only.
-- Correct the Admin Console help text: the trust list is an ETSI TS 119 602 List of Trusted Entities in its JSON/JWT binding, not a TS 119 612 XML trusted list, and an empty Trust List URL does not skip signature verification.
+- Correct the Admin Console help text: the JSON/JWT trust list is an ETSI TS 119 602 List of Trusted Entities (XML trusted lists are covered by a separate entry above), and an empty Trust List URL does not skip signature verification.
 - Token Status List signatures are always verified. Trust comes from the trust list's revocation services, otherwise its issuance services, otherwise the keys that verified the referenced credential (for example a did:web issuer). A token that none of these can verify is rejected. Cached lists verified with one issuer's own key are not reused for other issuers.
 - mDoc revocation is checked against the `status` in the signed MobileSecurityObject instead of the disclosed data elements. An SD-JWT `status` claim must be issuer-signed; a selectively disclosable one is rejected.
 - Bound status list downloads to 4 MiB and decompressed lists to 16 MiB.
@@ -29,7 +47,7 @@
 - Rename the theme script to `oid4vp-cross-device-status.js` and its configuration element to `oid4vp-cross-device-status-config`; custom themes that copied the old SSE script must switch to the new one.
 - Self-host the OpenKYC theme fonts (Inter, Plus Jakarta Sans, JetBrains Mono) so login pages make no requests to Google Fonts.
 
-## 0.1.0-rc.1 — 2026-09-16
+## 0.1.0-rc.1 (2026-09-16)
 
 Initial independent development baseline under su-engineering.
 
@@ -53,7 +71,7 @@ Initial independent development baseline under su-engineering.
 - Enforce the configured DID method list and reject DID resolution failures without certificate/metadata fallback.
 - Document multiple credential types using DCQL alternatives, multiple providers, or separate realms with independent SSO.
 
-No public release has been made from this development baseline.
+This development baseline was published as the 0.1.0-rc.1 tag.
 
 - Verify multiple credential types and formats in one DCQL response, including repeated presentations, query-specific claims/values, and required/alternative sets from the saved request.
 - Add identity query selection and query-scoped claim mappers in the Admin Console. Preserve all credential claims through deferred login; check every SD-JWT issuer and reject ambiguous scalar mappings.

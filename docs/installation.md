@@ -12,7 +12,7 @@ Install this extension in a test environment matching your deployment before pro
 | Root Compose runtime | Keycloak 26.8.1 |
 | Existing Coolify runtime | Keycloak 26.8.1 |
 | CI runtime matrix | Keycloak 26.8.0 and 26.8.1 |
-| Latest release | `0.1.0-rc.1` (Keycloak 26.5); unreleased `main` targets 26.8 |
+| Latest tagged version | `0.2.0` (Keycloak 26.8.0 and 26.8.1) |
 
 These are tested compatibility targets, not a long-term support promise. Download a runtime-specific JAR and verify its checksum using the [release guide](releases.md), or build from a reviewed revision below.
 
@@ -26,7 +26,7 @@ With Java 21, Docker, and the [test browser installed](development.md#running-te
 
 Output: `target/keycloak-extension-oid4vp.jar`. Keep its checksum and source revision with the deployment record. `./mvnw package -DskipTests` produces the same artifact when tests have already passed for that revision.
 
-To compile and test against the existing Coolify runtime instead:
+The Maven default is Keycloak 26.8.1, the same version as the Coolify runtime. To compile and test against the other CI runtime instead:
 
 ```sh
 ./mvnw clean verify -Dkeycloak.version=26.8.0
@@ -83,7 +83,7 @@ For an existing realm, configure its OID4VP provider in the same UI. Copy the bu
 
 Startup import only creates absent realms. Editing the JSON and restarting does **not** update an existing realm; use the Admin Console or Admin REST API for subsequent changes. Existing OpenKYC deployments should follow [migration](migration.md#openkyc-theme-rename-and-generic-realm).
 
-The provider ID is `oid4vp-wallet` (it was `oid4vp` up to `0.1.0-rc.1`; see [migration](migration.md#provider-id-rename-and-keycloak-268)). The examples use the realm alias `oid4vp`, which is independent of the provider ID. Mapper IDs are `oid4vp-user-attribute-mapper` and `oid4vp-user-session-mapper`. These values are independent of the Java package namespace.
+The provider ID is `oid4vp-wallet` (it was `oid4vp` up to `0.1.0-rc.1`; see [migration](migration.md#provider-id-rename-and-keycloak-268)). The Admin Console lists it as **OID4VP (Wallet Login)**. The examples use the realm alias `oid4vp`, which is independent of the provider ID. Mapper IDs are `oid4vp-user-attribute-mapper` and `oid4vp-user-session-mapper`. These values are independent of the Java package namespace.
 
 ## Validate the installation
 
