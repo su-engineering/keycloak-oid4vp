@@ -83,7 +83,8 @@ class Oid4vpDcApiServiceTest {
         session = mock(KeycloakSession.class);
         KeycloakContext context = mock(KeycloakContext.class);
         KeycloakUriInfo uriInfo = mock(KeycloakUriInfo.class);
-        when(uriInfo.getBaseUri()).thenReturn(URI.create("https://LOGIN.example.com:8443/auth/"));
+        // Host / X-Forwarded-Host decide the base URI when Keycloak's hostname is not pinned.
+        when(uriInfo.getBaseUri()).thenReturn(URI.create("https://attacker.example/auth/"));
         when(context.getUri()).thenReturn(uriInfo);
         when(session.getContext()).thenReturn(context);
 
@@ -92,6 +93,7 @@ class Oid4vpDcApiServiceTest {
         when(config.getClientIdScheme()).thenReturn("plain");
         when(config.getIdentityCredentialId()).thenReturn(null);
         when(config.isDcApiIsoMdocEnabled()).thenReturn(true);
+        when(config.getDcApiOrigin()).thenReturn("https://LOGIN.example.com:8443/auth/");
 
         provider = mock(Oid4vpIdentityProvider.class);
         when(provider.getConfig()).thenReturn(config);
@@ -170,6 +172,26 @@ class Oid4vpDcApiServiceTest {
         assertThatThrownBy(() -> service.handleResponse(HANDLE, STATE, "org-iso-mdoc", "{\"response\":\"x\"}"))
                 .isInstanceOf(IdentityBrokerException.class)
                 .hasMessageContaining("No org-iso-mdoc request");
+    }
+
+    @Test
+    void createRequest_refusesWithoutAConfiguredOrigin() {
+        when(config.getDcApiOrigin()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.createRequest(HANDLE))
+                .isInstanceOf(Oid4vpDcApiService.FlowMismatchException.class)
+                .hasMessageContaining("dcApiOrigin");
+    }
+
+    @Test
+    void configuredOrigin_fallsBackToTheRealmFrontendUrl() {
+        when(config.getDcApiOrigin()).thenReturn(null);
+        org.keycloak.models.RealmModel realm = mock(org.keycloak.models.RealmModel.class);
+        when(realm.getAttribute("frontendUrl")).thenReturn("https://id.example.org/auth");
+
+        assertThat(Oid4vpDcApiService.configuredOrigin(config, realm)).isEqualTo("https://id.example.org");
+        when(realm.getAttribute("frontendUrl")).thenReturn("not a url");
+        assertThat(Oid4vpDcApiService.configuredOrigin(config, realm)).isNull();
     }
 
     @Test

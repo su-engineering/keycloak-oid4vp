@@ -25,6 +25,7 @@ import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpConstants;
 import io.github.suengineering.keycloak.oid4vp.domain.Oid4vpTrustedAuthoritiesMode;
 import io.github.suengineering.keycloak.oid4vp.domain.PreparedDcqlQuery;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpCallbackProcessor;
+import io.github.suengineering.keycloak.oid4vp.service.Oid4vpDcApiService;
 import io.github.suengineering.keycloak.oid4vp.service.Oid4vpRedirectFlowService;
 import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryBuilder;
 import io.github.suengineering.keycloak.oid4vp.util.DcqlQueryValidator;
@@ -424,6 +425,15 @@ public class Oid4vpIdentityProvider extends AbstractIdentityProvider<Oid4vpIdent
         if (getConfig().isUseIdTokenSubject()) {
             LOG.warnf(
                     "OID4VP IdP '%s': the Digital Credentials API flow is not offered while the ID token subject is used",
+                    getConfig().getAlias());
+            return null;
+        }
+        if (Oid4vpDcApiService.configuredOrigin(
+                        getConfig(), session.getContext().getRealm())
+                == null) {
+            LOG.warnf(
+                    "OID4VP IdP '%s': the Digital Credentials API flow is not offered: set dcApiOrigin (or the realm "
+                            + "Frontend URL) to the origin that serves the login page",
                     getConfig().getAlias());
             return null;
         }
