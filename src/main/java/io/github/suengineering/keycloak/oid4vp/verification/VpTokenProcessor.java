@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.suengineering.keycloak.oid4vp.Oid4vpIdentityProviderConfig;
+import io.github.suengineering.keycloak.oid4vp.domain.MdocCertificateProfile;
 import io.github.suengineering.keycloak.oid4vp.domain.MdocVerificationResult;
 import io.github.suengineering.keycloak.oid4vp.domain.PresentationType;
 import io.github.suengineering.keycloak.oid4vp.domain.SdJwtVerificationResult;
@@ -60,6 +61,7 @@ public class VpTokenProcessor {
     private final TrustListProvider trustListProvider;
     private final String expectedTrustListLoTEType;
     private final DidResolver didResolver;
+    private final VicalProvider vicalProvider;
 
     public record Config(
             KeycloakSession session,
@@ -74,7 +76,10 @@ public class VpTokenProcessor {
             Duration trustListMaxStaleAge,
             String expectedTrustListLoTEType,
             DidResolver didResolver,
-            boolean trustListAllowUnsigned) {}
+            boolean trustListAllowUnsigned,
+            String vicalUrl,
+            List<X509Certificate> vicalSigningCerts,
+            MdocCertificateProfile mdocCertificateProfile) {}
 
     public record Request(
             String vpToken,
@@ -143,7 +148,11 @@ public class VpTokenProcessor {
                 config.didResolver(),
                 new JwtVcIssuerMetadataResolver(config.session(), config.issuerMetadataMaxCacheTtl()),
                 config.strictX5cVerification());
-        this.mdocVerifier = new MdocVerifier();
+        this.mdocVerifier = new MdocVerifier(config.mdocCertificateProfile());
+        this.vicalProvider = StringUtil.isBlank(config.vicalUrl())
+                ? null
+                : new VicalProvider(
+                        config.session(), config.vicalUrl(), config.vicalSigningCerts(), config.trustListMaxStaleAge());
         this.trustListProvider = new TrustListProvider(
                 config.session(),
                 config.trustListUrl(),
@@ -164,10 +173,19 @@ public class VpTokenProcessor {
 
     public VpTokenProcessor(
             ObjectMapper objectMapper, StatusListVerifier statusListVerifier, TrustListProvider trustListProvider) {
+        this(objectMapper, statusListVerifier, trustListProvider, null);
+    }
+
+    VpTokenProcessor(
+            ObjectMapper objectMapper,
+            StatusListVerifier statusListVerifier,
+            TrustListProvider trustListProvider,
+            VicalProvider vicalProvider) {
         this.sdJwtVerifier = new SdJwtVerifier(
                 Oid4vpIdentityProviderConfig.DEFAULT_CLOCK_SKEW_SECONDS,
                 Oid4vpIdentityProviderConfig.DEFAULT_KB_JWT_MAX_AGE_SECONDS);
         this.mdocVerifier = new MdocVerifier();
+        this.vicalProvider = vicalProvider;
         this.statusListVerifier = statusListVerifier;
         this.trustListProvider = trustListProvider;
         this.objectMapper = objectMapper;
@@ -294,6 +312,7 @@ public class VpTokenProcessor {
         if (mdocVerifier.isMdoc(credential)) {
             // Use alternateResponseUri as the response_uri for session transcript
             byte[] jwkThumbprintBytes = decodeJwkThumbprint(encryptionJwkThumbprint);
+            trustedCerts = mdocAnchors(credential, trustedCerts);
             MdocVerificationResult result = isoEncryptionInfo != null
                     ? mdocVerifier.verifyIsoDcApi(credential, trustedCerts, isoEncryptionInfo, dcApiOrigin)
                     : dcApiOrigin != null
@@ -316,6 +335,23 @@ public class VpTokenProcessor {
         }
 
         return null;
+    }
+
+    /** Trust-list anchors plus the VICAL IACAs listed for the document's docType. */
+    private List<X509Certificate> mdocAnchors(String credential, List<X509Certificate> trustListCerts) {
+        if (vicalProvider == null) return trustListCerts;
+        List<X509Certificate> vicalAnchors;
+        try {
+            vicalAnchors = vicalProvider.anchorsFor(mdocVerifier.signedDocType(credential));
+        } catch (RuntimeException e) {
+            // The trust list still applies; a missing VICAL only removes the anchors it would add.
+            LOG.warnf("VICAL unavailable, verifying mDoc against the trust list only: %s", e.getMessage());
+            return trustListCerts;
+        }
+        if (vicalAnchors.isEmpty()) return trustListCerts;
+        List<X509Certificate> combined = new ArrayList<>(trustListCerts);
+        combined.addAll(vicalAnchors);
+        return combined;
     }
 
     private byte[] decodeJwkThumbprint(String encoded) {

@@ -32,6 +32,7 @@ import com.authlete.cbor.CBORTaggedItem;
 import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
+import io.github.suengineering.keycloak.oid4vp.domain.MdocCertificateProfile;
 import io.github.suengineering.keycloak.oid4vp.domain.MdocVerificationResult;
 import java.security.MessageDigest;
 import java.security.PublicKey;
@@ -55,6 +56,30 @@ import org.keycloak.utils.StringUtil;
 public class MdocVerifier {
 
     private static final Logger LOG = Logger.getLogger(MdocVerifier.class);
+
+    private final MdocCertificateProfile certificateProfile;
+
+    public MdocVerifier() {
+        this(MdocCertificateProfile.NONE);
+    }
+
+    public MdocVerifier(MdocCertificateProfile certificateProfile) {
+        this.certificateProfile = certificateProfile != null ? certificateProfile : MdocCertificateProfile.NONE;
+    }
+
+    /**
+     * The docType in the MobileSecurityObject, read without verifying anything. Used to pick the trust
+     * anchors that may issue that docType; the signature checked afterwards binds the value.
+     */
+    public String signedDocType(String deviceResponseToken) {
+        try {
+            CBORPairList mso = parseMso(parseDocument(decodeBase64(deviceResponseToken)));
+            return mso != null ? str(mso, "docType") : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static final int CBOR_TAG_DATE = 1004;
 
     public boolean isMdoc(String token) {
@@ -174,7 +199,7 @@ public class MdocVerifier {
                         "mDoc presentation requires device authentication and complete session context");
             }
             Map<String, Object> claims = extractClaims(document, mso);
-            verifyIssuerSignature(document, trustedCertificates);
+            verifyIssuerSignature(document, mso, trustedCertificates);
 
             validateValidity(mso);
             verifyDigests(mso, document);
@@ -274,7 +299,8 @@ public class MdocVerifier {
         return asMap(decoded);
     }
 
-    private void verifyIssuerSignature(CBORPairList document, List<X509Certificate> trustedCertificates) {
+    private void verifyIssuerSignature(
+            CBORPairList document, CBORPairList mso, List<X509Certificate> trustedCertificates) {
         if (trustedCertificates == null || trustedCertificates.isEmpty()) {
             throw new IllegalStateException("No trusted keys available for mDoc signature verification");
         }
@@ -293,6 +319,10 @@ public class MdocVerifier {
                 throw new IllegalStateException("issuerAuth has no x5chain");
             }
             PublicKey leafKey = X5cChainValidator.validateCertChain(x5chain, trustedCertificates);
+            if (certificateProfile == MdocCertificateProfile.ISO_18013_5) {
+                Iso18013CertificateProfile.check(
+                        x5chain, trustedCertificates, parseInstant(val(map(mso, "validityInfo"), "signed")));
+            }
             if (!new COSEVerifier(leafKey).verify(sign1)) {
                 throw new IllegalStateException("issuerAuth signature does not verify with the document signer key");
             }

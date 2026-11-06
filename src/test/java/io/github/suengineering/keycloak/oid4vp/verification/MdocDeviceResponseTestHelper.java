@@ -77,6 +77,7 @@ class MdocDeviceResponseTestHelper {
     final KeyPair issuerKeyPair;
     final KeyPair deviceKeyPair;
     final X509Certificate issuerCert;
+    final List<X509Certificate> issuerChain;
     final MdocAlgorithmSpec algorithm;
     String docType = "org.iso.18013.5.1.mDL";
     String namespace = "org.iso.18013.5.1";
@@ -93,6 +94,16 @@ class MdocDeviceResponseTestHelper {
         this.issuerKeyPair = generateKeyPair(algorithm);
         this.deviceKeyPair = generateKeyPair(algorithm);
         this.issuerCert = generateSelfSignedCert(issuerKeyPair, algorithm.certificateSignatureAlgorithm());
+        this.issuerChain = List.of(issuerCert);
+    }
+
+    /** Signs with a given document signer key and its x5chain (leaf first). */
+    MdocDeviceResponseTestHelper(KeyPair issuerKeyPair, List<X509Certificate> issuerChain) throws Exception {
+        this.algorithm = MdocAlgorithmSpec.ES256;
+        this.issuerKeyPair = issuerKeyPair;
+        this.deviceKeyPair = generateKeyPair(algorithm);
+        this.issuerCert = issuerChain.get(0);
+        this.issuerChain = List.copyOf(issuerChain);
     }
 
     MdocDeviceResponseTestHelper docType(String docType) {
@@ -222,7 +233,7 @@ class MdocDeviceResponseTestHelper {
         var protectedHeader =
                 new COSEProtectedHeaderBuilder().alg(algorithm.coseAlgorithm()).build();
         var unprotectedHeader =
-                new COSEUnprotectedHeaderBuilder().x5chain(List.of(issuerCert)).build();
+                new COSEUnprotectedHeaderBuilder().x5chain(issuerChain).build();
 
         // Build sig structure and sign
         var sigStructure = new SigStructureBuilder()
