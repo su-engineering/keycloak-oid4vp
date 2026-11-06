@@ -624,6 +624,7 @@ public class MdocVerifier {
 
     private static CBORItem decodeCbor(byte[] bytes) {
         try {
+            io.github.suengineering.keycloak.oid4vp.util.CborLimits.check(bytes);
             return new CBORDecoder(bytes).next();
         } catch (Exception e) {
             throw new IllegalStateException("Failed to decode CBOR: " + e.getMessage(), e);

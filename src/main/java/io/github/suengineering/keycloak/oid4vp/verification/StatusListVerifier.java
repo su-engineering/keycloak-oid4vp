@@ -284,6 +284,7 @@ public class StatusListVerifier {
         COSESign1 sign1;
         CBORPairList claims;
         try {
+            io.github.suengineering.keycloak.oid4vp.util.CborLimits.check(cwt);
             CBORItem item = new CBORDecoder(cwt).next();
             if (item instanceof CBORTaggedItem tagged && tagged.getTagNumber().intValue() == 18) {
                 item = tagged.getTagContent();
@@ -292,6 +293,7 @@ public class StatusListVerifier {
             if (!(sign1.getPayload() instanceof CBORByteArray payload)) {
                 throw new IllegalStateException("Status list CWT has no payload");
             }
+            io.github.suengineering.keycloak.oid4vp.util.CborLimits.check(payload.getValue());
             if (!(new CBORDecoder(payload.getValue()).next() instanceof CBORPairList map)) {
                 throw new IllegalStateException("Status list CWT payload is not a claims map");
             }

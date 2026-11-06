@@ -362,6 +362,7 @@ public final class IsoMdocDcApi {
     }
 
     private static CBORItem decode(byte[] bytes) throws Exception {
+        io.github.suengineering.keycloak.oid4vp.util.CborLimits.check(bytes);
         return new CBORDecoder(bytes).next();
     }
 

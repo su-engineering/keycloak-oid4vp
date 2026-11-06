@@ -176,6 +176,7 @@ public class VicalProvider {
         if (signingCertificates.isEmpty()) {
             throw new IllegalStateException("No VICAL signing certificate configured");
         }
+        io.github.suengineering.keycloak.oid4vp.util.CborLimits.check(signedVical);
         CBORItem item = new CBORDecoder(signedVical).next();
         if (item instanceof CBORTaggedItem tagged && tagged.getTagNumber().intValue() == 18) {
             item = tagged.getTagContent();
@@ -195,6 +196,7 @@ public class VicalProvider {
         if (!(sign1.getPayload() instanceof CBORByteArray payload)) {
             throw new IllegalStateException("VICAL has no payload");
         }
+        io.github.suengineering.keycloak.oid4vp.util.CborLimits.check(payload.getValue());
         if (!(new CBORDecoder(payload.getValue()).next() instanceof CBORPairList vical)) {
             throw new IllegalStateException("VICAL payload is not a map");
         }
